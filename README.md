@@ -18,6 +18,23 @@ Then use the following command to run an analysis:
 docker run relai ../mnist_nets/<net_name>.txt ../mnist_images/<image>.txt <epislon>
 ```
 
+Possible values for MNIST nets are:
+
+- `mnist_relu_3_10`
+- `mnist_relu_3_20`
+- `mnist_relu_3_50`
+- `mnist_relu_4_1024`
+- `mnist_relu_6_20`
+- `mnist_relu_6_50`
+- `mnist_relu_6_100`
+- `mnist_relu_6_200`
+- `mnist_relu_9_100`
+- `mnist_relu_9_200`
+
+Possible values for the MNIST images are:
+
+- `imgn` where `n` ranges from 0 to 99 inclusive.
+
 ## Project Description
 
 - Write a generic analyser to verify the robustness of any feed-forward network using ReLU activation functions.
