@@ -47,5 +47,7 @@ WORKDIR /home/riai2018/analyzer
 RUN python3 --version
 RUN pip3 --version
 
+COPY test.sh /home/riai2018/analyzer/test.sh
+
 # Define default command.
-ENTRYPOINT ["python3", "analyzer.py"]
+ENTRYPOINT ["bash", "test.sh"]

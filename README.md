@@ -15,7 +15,7 @@ docker build . -t relai
 Then use the following command to run an analysis:
 
 ```sh
-docker run relai ../mnist_nets/<net_name>.txt ../mnist_images/<image>.txt <epislon>
+docker run relai <net_name> <image> <epislon>
 ```
 
 Possible values for MNIST nets are:
@@ -33,7 +33,21 @@ Possible values for MNIST nets are:
 
 Possible values for the MNIST images are:
 
-- `imgn` where `n` ranges from 0 to 99 inclusive.
+- Range from 0 to 99 inclusive.
+
+An example command would be:
+
+```sh
+docker run relai mnist_relu_3_10 2 0.1
+```
+
+### Running full tests
+
+The docker can also be passed the `test` argument to fully test the entire analyzer over many experiements:
+
+```sh
+docker run relai test
+```
 
 ## Project Description
 
