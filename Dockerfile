@@ -7,7 +7,8 @@ RUN apt-get update && apt-get install -y\
     software-properties-common\
     locales\
     unzip\
-    python3-pip
+    python3-pip\
+    bc
 
 # Install ELINA deps
 RUN apt-get install -y m4 \

@@ -15,7 +15,7 @@ docker build . -t relai
 Then use the following command to run an analysis:
 
 ```sh
-docker run relai <net_name> <image> <epislon>
+docker run relai <net_name> <image> <epsilon>
 ```
 
 Possible values for MNIST nets are:
@@ -41,9 +41,38 @@ An example command would be:
 docker run relai mnist_relu_3_10 2 0.1
 ```
 
-### Running full tests
+## Tests
 
-The docker can also be passed the `test` argument to fully test the entire analyzer over many experiements:
+Running tests allows to see aggregate statistics for more than a single run. A sample output of running some tests is:
+
+```
+Testing net 'mnist_relu_3_10' for epsilon 0.001
+Total tests:  100
+Passed tests: 93
+Percentage:   93.00%
+Total time:   28s
+Time/test:    .28s
+```
+
+### Running Partial Tests
+
+A single network can be run on all images for a single epsilon value by using:
+
+```sh
+docker run relai <net_name> <epsilon>
+```
+
+Hence running:
+
+```sh
+docker run relai mnist_relu_3_10 0.001
+```
+
+will run 100 tests over all images for the `mnist_relu_3_10` neural net with an epsilon value of `0.001`.
+
+### Running full Tests
+
+The docker can also be passed the `test` argument to fully test the entire analyzer over many experiments:
 
 ```sh
 docker run relai test
