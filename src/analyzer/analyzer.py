@@ -1,7 +1,6 @@
 import sys
 sys.path.insert(0, '../ELINA/python_interface/')
 
-
 import numpy as np
 import re
 import csv
@@ -18,6 +17,8 @@ import ctypes
 from ctypes.util import find_library
 from gurobipy import *
 import time
+
+import solver_functions as solvers
 
 libc = CDLL(find_library('c'))
 cstdout = c_void_p.in_dll(libc, 'stdout')
@@ -123,17 +124,37 @@ def generate_linexpr0(weights, bias, size):
         elina_linexpr0_set_coeff_scalar_double(linexpr0,i,weights[i])
     return linexpr0
 
-def extract_xi_bounds(man, element, n_pixels):
+#Extract the current bounds of the neurons zi of the all current forward layer
+def extract_xi_bounds(man, element, num_in_pixels):
 
-    lower_bounds = numpy.zeros(n_pixels)
-    upper_bounds = numpy.zeros(n_pixels)
+    lower_bounds = numpy.zeros(num_in_pixels)
+    upper_bounds = numpy.zeros(num_in_pixels)
     bounds = elina_abstract0_to_box(man,element)
     
-    for idx in range(n_pixels):
+    for idx in range(num_in_pixels):
         lower_bounds[idx] = bounds[idx].contents.inf.contents.val.dbl
         upper_bounds[idx] = bounds[idx].contents.sup.contents.val.dbl
 
     return lower_bounds, upper_bounds
+
+#Inject the new bounds of the neurons zj of the all next forward layer
+#TODO: check this function, not sure whether it works
+def inject_zj_bounds(man, element, num_out_pixels, lower_bounds, upper_bounds):
+
+    bounds = elina_abstract0_to_box(man,element)
+    
+    for idx in range(num_in_pixels):
+        bounds[idx].contents.inf.contents.val.dbl = lower_bounds[idx] 
+        bounds[idx].contents.sup.contents.val.dbl = upper_bounds[idx]
+
+    return man, element
+
+def get_weights_to_jneuron(weights, weights_j, j):
+    idx_neuron=0
+    for weights_neuron in weights:
+        weights_j[idx_neuron]=weights_neuron[idx_neuron][j]
+        idx_neuron+=1
+    return weights_j
 
 def analyze(nn, LB_N0, UB_N0, label):   
     num_pixels = len(LB_N0)
@@ -150,47 +171,61 @@ def analyze(nn, LB_N0, UB_N0, label):
     elina_interval_array_free(itv,num_pixels)
     for layerno in range(numlayer):
         if(nn.layertypes[layerno] in ['ReLU', 'Affine']):
-           weights = nn.weights[nn.ffn_counter]
-           biases = nn.biases[nn.ffn_counter]
+            weights = nn.weights[nn.ffn_counter]
+            biases = nn.biases[nn.ffn_counter]
 
-           print("Layer number -> ",layerno)
-           print("Current layer weights per neuron -> ", len(weights[0]))
-           print("Current layer number of neurons -> ", len(weights))
-           print("Current layer number of biases -> ", len(biases))
+            print("Layer number -> ",layerno)
+            print("Current layer neurons -> ", len(weights[0]))
+            print("Next layer number of neurons -> ", len(weights))
+            print("Next layer number of biases -> ", len(biases))
            
-           dims = elina_abstract0_dimension(man,element)
-           num_in_pixels = dims.intdim + dims.realdim
-           num_out_pixels = len(weights)
-           dimadd = elina_dimchange_alloc(0,num_out_pixels)
-  
-           for i in range(num_out_pixels):
-               dimadd.contents.dim[i] = num_in_pixels
-           elina_abstract0_add_dimensions(man, True, element, dimadd, False)
-           elina_dimchange_free(dimadd)
-           np.ascontiguousarray(weights, dtype=np.double)
-           np.ascontiguousarray(biases, dtype=np.double)
-           var = num_in_pixels
-  
-           # handle affine layer
-           for i in range(num_out_pixels):
-               tdim= ElinaDim(var)
-               linexpr0 = generate_linexpr0(weights[i],biases[i],num_in_pixels)
-               element = elina_abstract0_assign_linexpr_array(man, True, element, tdim, linexpr0, 1, None)
-               var+=1
-           dimrem = elina_dimchange_alloc(0,num_in_pixels)
-           for i in range(num_in_pixels):
-               dimrem.contents.dim[i] = i
-           elina_abstract0_remove_dimensions(man, True, element, dimrem)
-           elina_dimchange_free(dimrem)
+            dims = elina_abstract0_dimension(man,element)
+            num_in_pixels = dims.intdim + dims.realdim
+            num_out_pixels = len(weights)
+            dimadd = elina_dimchange_alloc(0,num_out_pixels)
 
-           # handle ReLU layer 
-           if(nn.layertypes[layerno]=='ReLU'):
-              element = relu_box_layerwise(man,True,element,0, num_out_pixels)
+            #TODO: to complete
+            #if(layerno == 0):
+            #    zj_lbs = np.array(num_out_pixels)
+            #    zj_ubs = np.array(num_out_pixels)
+            #    xi_lbounds, xi_ubounds = extract_xi_bounds(man,element,num_in_pixels)
+            #    weights_j = np.array(num_in_pixels)
+            #    for j in range(num_out_pixels):
+            #        weights_j = get_weights_to_jneuron(weights, weights_j, j)
+            #        zj_lb, zj_up = solvers.bounds_linear_solver_neuronwise(weights_j, biases[j], xi_lbounds, xi_ubounds)
+            #        zj_lbs[j] = zj_lb 
+            #        zj_ubs[j] = zj_ub        
+            #    inject_zj_bounds(man, element, num_out_pixels, lower_bounds = zj_lbs, upper_bounds = zj_ubs ):
+            #else:
 
-           nn.ffn_counter+=1 
+            for i in range(num_out_pixels):
+                dimadd.contents.dim[i] = num_in_pixels
+            elina_abstract0_add_dimensions(man, True, element, dimadd, False)
+            elina_dimchange_free(dimadd)
+            np.ascontiguousarray(weights, dtype=np.double)
+            np.ascontiguousarray(biases, dtype=np.double)
+            var = num_in_pixels
+  
+            # handle affine layer
+            for i in range(num_out_pixels):
+                tdim= ElinaDim(var)
+                linexpr0 = generate_linexpr0(weights[i],biases[i],num_in_pixels)
+                element = elina_abstract0_assign_linexpr_array(man, True, element, tdim, linexpr0, 1, None)
+                var+=1
+            dimrem = elina_dimchange_alloc(0,num_in_pixels)
+            for i in range(num_in_pixels):
+                dimrem.contents.dim[i] = i
+            elina_abstract0_remove_dimensions(man, True, element, dimrem)
+            elina_dimchange_free(dimrem)
+
+            # handle ReLU layer 
+            if(nn.layertypes[layerno]=='ReLU'):
+                element = relu_box_layerwise(man,True,element,0, num_out_pixels)
+
+            nn.ffn_counter+=1 
 
         else:
-           print(' net type not supported')
+           print('net type not supported')
    
     dims = elina_abstract0_dimension(man,element)
     output_size = dims.intdim + dims.realdim
