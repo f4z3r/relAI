@@ -1,5 +1,5 @@
 
-def linear_solver_neuronwise(weights, biases, xi_lbounds, xi_ubounds):
+def linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
 
     """
     Params: see bounds_linear_solver_neuronwise
@@ -24,10 +24,11 @@ def linear_solver_neuronwise(weights, biases, xi_lbounds, xi_ubounds):
     #z = sum(wi*xi)
     for i in range(n_bounds):
         z += weights[i] * m.getVarByName("x"+str(i)) 
+    z += bias 
     
     return m, z
 
-def bounds_linear_solver_neuronwise(weights, biases, xi_lbounds, xi_ubounds):
+def bounds_linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
     
     """
     Params:
@@ -41,7 +42,7 @@ def bounds_linear_solver_neuronwise(weights, biases, xi_lbounds, xi_ubounds):
     where z is the value of the neuron in the next layer
     """
 
-    model, z = linear_solver_neuronwise(weights, biases, xi_lbounds, xi_ubounds)
+    model, z = linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds)
     
     #Find upper bound of the neuron z
     model.SetObjective(z, GRB.MAXIMIZE)
