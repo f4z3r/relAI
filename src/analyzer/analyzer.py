@@ -123,11 +123,24 @@ def generate_linexpr0(weights, bias, size):
         elina_linexpr0_set_coeff_scalar_double(linexpr0,i,weights[i])
     return linexpr0
 
+def extract_xi_bounds(man, element, n_pixels):
+
+    lower_bounds = numpy.zeros(n_pixels)
+    upper_bounds = numpy.zeros(n_pixels)
+    bounds = elina_abstract0_to_box(man,element)
+    
+    for idx in range(n_pixels):
+        lower_bounds[idx] = bounds[idx].contents.inf.contents.val.dbl
+        upper_bounds[idx] = bounds[idx].contents.sup.contents.val.dbl
+
+    return lower_bounds, upper_bounds
+
 def analyze(nn, LB_N0, UB_N0, label):   
     num_pixels = len(LB_N0)
     nn.ffn_counter = 0
     numlayer = nn.numlayer 
     man = elina_box_manager_alloc()
+    print("Number of pixels -> ",num_pixels)
     itv = elina_interval_array_alloc(num_pixels)
     for i in range(num_pixels):
         elina_interval_set_double(itv[i],LB_N0[i],UB_N0[i])
@@ -139,11 +152,17 @@ def analyze(nn, LB_N0, UB_N0, label):
         if(nn.layertypes[layerno] in ['ReLU', 'Affine']):
            weights = nn.weights[nn.ffn_counter]
            biases = nn.biases[nn.ffn_counter]
+
+           print("Layer number -> ",layerno)
+           print("Current layer weights per neuron -> ", len(weights[0]))
+           print("Current layer number of neurons -> ", len(weights))
+           print("Current layer number of biases -> ", len(biases))
+           
            dims = elina_abstract0_dimension(man,element)
            num_in_pixels = dims.intdim + dims.realdim
            num_out_pixels = len(weights)
-
-           dimadd = elina_dimchange_alloc(0,num_out_pixels)    
+           dimadd = elina_dimchange_alloc(0,num_out_pixels)
+  
            for i in range(num_out_pixels):
                dimadd.contents.dim[i] = num_in_pixels
            elina_abstract0_add_dimensions(man, True, element, dimadd, False)
@@ -151,6 +170,7 @@ def analyze(nn, LB_N0, UB_N0, label):
            np.ascontiguousarray(weights, dtype=np.double)
            np.ascontiguousarray(biases, dtype=np.double)
            var = num_in_pixels
+  
            # handle affine layer
            for i in range(num_out_pixels):
                tdim= ElinaDim(var)
@@ -162,9 +182,11 @@ def analyze(nn, LB_N0, UB_N0, label):
                dimrem.contents.dim[i] = i
            elina_abstract0_remove_dimensions(man, True, element, dimrem)
            elina_dimchange_free(dimrem)
+
            # handle ReLU layer 
            if(nn.layertypes[layerno]=='ReLU'):
               element = relu_box_layerwise(man,True,element,0, num_out_pixels)
+
            nn.ffn_counter+=1 
 
         else:
@@ -219,6 +241,7 @@ if __name__ == '__main__':
     netname = argv[1]
     specname = argv[2]
     epsilon = float(argv[3])
+
     #c_label = int(argv[4])
     with open(netname, 'r') as netfile:
         netstring = netfile.read()
