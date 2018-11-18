@@ -31,8 +31,8 @@ def bounds_linear_solver_neuronwise(weights, biases, xi_lbounds, xi_ubounds):
     
     """
     Params:
-    -weights: n x 1 vector
-    -biases: n x 1 vector
+    -weights: m x 1 vector
+    -biases: m x 1 vector
     -xi_lbounds: n x 1 vector
     -xi_lbounds: n x 1 vector
     
