@@ -47,17 +47,15 @@ def bounds_linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
     #Find upper bound of the neuron z
     model.SetObjective(z, GRB.MAXIMIZE)
     model.optimize()
-    neuron_ub = z.X
+    #Applying ReLU on neuron_ub
+    neuron_ub = z.X if z.X > 0 else 0
 
     model.reset(0)
 
     #Find lower bound of the neuron z    
     model.SetObjective(z, GRB.MINIMIZE)
     model.optimize()
-    neuron_lb = z.X
+    #Applying ReLU on neuron_lb
+    neuron_lb = z.X if z.X > 0 else 0
 
-    #Applying ReLU([neuron_lb,neuron_up])
-    if neuron_ub < 0:
-        return 0,0
-    else:
-        return neuron_lb,neuron_ub
+    return neuron_lb,neuron_ub
