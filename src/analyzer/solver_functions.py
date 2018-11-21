@@ -1,4 +1,40 @@
 
+#TODO: to complete
+def linear_solver_layerwise(weights, biases, l_bounds, u_bounds, neurons_next_l):
+
+
+    #Create gurobipy linear solver
+    m = Model("layerwise_linear_solver")
+    n_bounds = l_bounds.shape()[0]
+
+    #Create variables and constraints of linear solver
+    for i in range(n_bounds):
+        
+        x_i="x"+str(i)
+        #xi >= lower bound && xi <= upper bound
+        m.addVar(lb=l_bounds[i], ub=u_bounds[i], vtype=GRB.CONTINUOUS, name=x_i ) 
+
+    #sum of all z_i objective
+    z_i_sum=LinExpr()
+
+    for i in range(neurons_next_l):
+
+        z_i="z"+str(i)
+        
+        m.addVar(vtype=GRB.CONTINUOUS,name=z_i)
+
+        expr=LinExpr()
+        #z_i = sum(Wij*xi) --> for both lower and upper bounds
+        for j in range(n_bounds):
+            expr += weights[i][j]* m.getVarByName("x"+str(j)) 
+        m.addConstr(expr,GRB.EQUAL,z_i,"z_i_ub")  
+        m.addConstr(expr,GRB.EQUAL,z_i,"z_i")  
+
+    GRBLinExpr obj = new GRBLinExpr();
+    
+    
+    return m, obj
+
 def linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
 
     """

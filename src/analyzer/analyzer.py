@@ -137,17 +137,65 @@ def extract_xi_bounds(man, element, num_in_pixels):
 
     return lower_bounds, upper_bounds
 
-#Inject the new bounds of the neurons zj of the all next forward layer
-#TODO: check this function, not sure whether it works
-def inject_zj_bounds(man, element, num_out_pixels, lower_bounds, upper_bounds):
+#Inject the new bounds to the next layer neuron zj
+def inject_zj_bounds(man, element, idx_zjs, lower_bounds, upper_bounds):
+    """
+    Params:
 
-    bounds = elina_abstract0_to_box(man,element)
+    idx_zjs: array k x 1
+    lower_bounds: array k x 1
+    upper_bounds: array k x 1
+
+    Return:
+
+    element, man
+    where element has updated bound for the zjs
+    """
+
+    new_bounds =  len(lower_bounds)
     
-    for idx in range(num_in_pixels):
-        bounds[idx].contents.inf.contents.val.dbl = lower_bounds[idx] 
-        bounds[idx].contents.sup.contents.val.dbl = upper_bounds[idx]
+    for idx_bound in range(0,new_bounds):
 
-    return man, element
+        idx_zj = idx_zjs[idx_bound]
+        l_bound = lower_bounds[idx_bound]
+        u_bound = upper_bounds[idx_bound]
+
+        #create an array of two linear constraints
+        lincons0_array = elina_lincons0_array_make(2)
+
+        #Create a greater than or equal to inequality for the lower bound
+        lincons0_array.p[0].constyp = c_uint(ElinaConstyp.ELINA_CONS_SUPEQ)
+        linexpr0 = elina_linexpr0_alloc(ElinaLinexprDiscr.ELINA_LINEXPR_SPARSE, 1)
+        cst = pointer(linexpr0.contents.cst)
+
+        #plug the lower bound “l_bound” here
+        elina_scalar_set_double(cst.contents.val.scalar, -l_bound)
+        linterm = pointer(linexpr0.contents.p.linterm[0])
+
+        #plug the dimension “i” here
+        linterm.contents.dim = ElinaDim(idx_zj)
+        coeff = pointer(linterm.contents.coeff)
+        elina_scalar_set_double(coeff.contents.val.scalar, 1)
+        lincons0_array.p[0].linexpr0 = linexpr0
+
+        #create a greater than or equal to inequality for the upper bound
+        lincons0_array.p[1].constyp = c_uint(ElinaConstyp.ELINA_CONS_SUPEQ)
+        linexpr0 = elina_linexpr0_alloc(ElinaLinexprDiscr.ELINA_LINEXPR_SPARSE, 1)
+        cst = pointer(linexpr0.contents.cst)
+
+        #plug the upper bound “u_bound” here
+        elina_scalar_set_double(cst.contents.val.scalar, u_bound)
+        linterm = pointer(linexpr0.contents.p.linterm[0])
+
+        #plug the dimension “i” here
+        linterm.contents.dim = ElinaDim(idx_zj)
+        coeff = pointer(linterm.contents.coeff)
+        elina_scalar_set_double(coeff.contents.val.scalar, -1)
+        lincons0_array.p[1].linexpr0 = linexpr0
+
+        element = elina_abstract0_meet_lincons_array(man,True,element,inject_zj_bounds(element))
+
+    return element, man
 
 def get_weights_to_jneuron(weights, weights_j, j):
     idx_neuron=0
@@ -195,7 +243,7 @@ def analyze(nn, LB_N0, UB_N0, label):
             #        zj_lb, zj_up = solvers.bounds_linear_solver_neuronwise(weights_j, biases[j], xi_lbounds, xi_ubounds)
             #        zj_lbs[j] = zj_lb 
             #        zj_ubs[j] = zj_ub        
-            #    inject_zj_bounds(man, element, num_out_pixels, lower_bounds = zj_lbs, upper_bounds = zj_ubs ):
+            #    element, man = inject_zj_bounds(man, element, num_out_pixels, lower_bounds = zj_lbs, upper_bounds = zj_ubs ):
             #else:
 
             for i in range(num_out_pixels):
