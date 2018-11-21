@@ -19,19 +19,17 @@ def linear_solver_layerwise(weights, biases, l_bounds, u_bounds, neurons_next_l)
 
     for i in range(neurons_next_l):
 
-        z_i="z"+str(i)
+        zi="z"+str(i)
         
         m.addVar(vtype=GRB.CONTINUOUS,name=z_i)
 
-        expr=LinExpr()
+        zi_expr=LinExpr()
         #z_i = sum(Wij*xi) --> for both lower and upper bounds
         for j in range(n_bounds):
-            expr += weights[i][j]* m.getVarByName("x"+str(j)) 
-        m.addConstr(expr,GRB.EQUAL,z_i,"z_i_ub")  
-        m.addConstr(expr,GRB.EQUAL,z_i,"z_i")  
-
-    GRBLinExpr obj = new GRBLinExpr();
-    
+            zi_expr += weights[i][j] * m.getVarByName("x"+str(j)) 
+        
+        m.addConstr(m.getVarByName(zi),GRB.EQUAL,zi_expr,"c"+i)
+        #TODO: decide what to optiize as the objective
     
     return m, obj
 
