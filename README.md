@@ -4,7 +4,7 @@ This project uses `git lfs`. Please refer to [their website](https://git-lfs.git
 
 ## Running the Project
 
-The project is hosted on a docker image. This might not be 100% stable.
+The project is hosted on a docker image.
 
 In order to build the docker image please run:
 
@@ -12,10 +12,10 @@ In order to build the docker image please run:
 docker build . -t relai
 ```
 
-Then use the following command to run an analysis:
+from the project root. Then use the following command to run an analysis:
 
 ```sh
-docker run relai <net_name> <image> <epsilon>
+docker run -v $(pwd)/src/analyzer/:/home/riai2018/analyzer relai <net_name> <image> <epsilon>
 ```
 
 Possible values for MNIST nets are:
@@ -38,8 +38,10 @@ Possible values for the MNIST images are:
 An example command would be:
 
 ```sh
-docker run relai mnist_relu_3_10 2 0.1
+docker run -v $(pwd)/src/analyzer/:/home/riai2018/analyzer relai mnist_relu_3_10 2 0.1
 ```
+
+called from the project root.
 
 ## Tests
 
@@ -59,13 +61,13 @@ Time/test:    .28s
 A single network can be run on all images for a single epsilon value by using:
 
 ```sh
-docker run relai <net_name> <epsilon>
+docker run -v $(pwd)/src/analyzer/:/home/riai2018/analyzer relai <net_name> <epsilon>
 ```
 
 Hence running:
 
 ```sh
-docker run relai mnist_relu_3_10 0.001
+docker run -v $(pwd)/src/analyzer/:/home/riai2018/analyzer relai mnist_relu_3_10 0.001
 ```
 
 will run 100 tests over all images for the `mnist_relu_3_10` neural net with an epsilon value of `0.001`.
@@ -75,7 +77,7 @@ will run 100 tests over all images for the `mnist_relu_3_10` neural net with an 
 The docker can also be passed the `test` argument to fully test the entire analyzer over many experiments:
 
 ```sh
-docker run relai test
+docker run -v $(pwd)/src/analyzer/:/home/riai2018/analyzer relai test
 ```
 
 ## Project Description

@@ -22,7 +22,7 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
 # Add files.
-ADD src/ /home/riai2018/
+ADD src/Archive.zip /home/riai2018/Archive.zip
 RUN cd /home/riai2018/ && unzip Archive.zip
 COPY requirements.txt /home/requirements.txt
 
@@ -48,7 +48,7 @@ WORKDIR /home/riai2018/analyzer
 RUN python3 --version
 RUN pip3 --version
 
-COPY test.sh /home/riai2018/analyzer/test.sh
+# COPY test.sh /home/riai2018/analyzer/test.sh
 
 # Define default command.
 ENTRYPOINT ["bash", "test.sh"]

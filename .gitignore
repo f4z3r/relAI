@@ -15,3 +15,6 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# dummy ignore dummy object created by analyzer
+/src/analyzer/dummy
+
