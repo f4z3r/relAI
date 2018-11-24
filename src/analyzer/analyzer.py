@@ -226,7 +226,7 @@ def analyze(nn, LB_N0, UB_N0, label):
             dimadd = elina_dimchange_alloc(0,num_out_pixels)
 
             #TODO: to complete
-            """if(layerno == 0):
+            if(layerno == 0):
                 zj_lbs = np.array(num_out_pixels)
                 zj_ubs = np.array(num_out_pixels)
                 xi_lbounds, xi_ubounds = extract_xi_bounds(man,element,num_in_pixels)
@@ -235,34 +235,33 @@ def analyze(nn, LB_N0, UB_N0, label):
                     zj_lb, zj_up = solvers.bounds_linear_solver_neuronwise(weights[j], biases[j], xi_lbounds, xi_ubounds)
                     zj_lbs[j] = zj_lb
                     zj_ubs[j] = zj_ub
-                element, man = inject_zj_bounds(man, element, num_out_pixels, lower_bounds = zj_lbs, upper_bounds = zj_ubs ):
-            else:"""
+                element, man = inject_zj_bounds(man, element, num_out_pixels, lower_bounds=zj_lbs, upper_bounds=zj_ubs)
+            else:
+                for i in range(num_out_pixels):
+                    dimadd.contents.dim[i] = num_in_pixels
+                elina_abstract0_add_dimensions(man, True, element, dimadd, False)
+                elina_dimchange_free(dimadd)
+                np.ascontiguousarray(weights, dtype=np.double)
+                np.ascontiguousarray(biases, dtype=np.double)
+                var = num_in_pixels
 
-            for i in range(num_out_pixels):
-                dimadd.contents.dim[i] = num_in_pixels
-            elina_abstract0_add_dimensions(man, True, element, dimadd, False)
-            elina_dimchange_free(dimadd)
-            np.ascontiguousarray(weights, dtype=np.double)
-            np.ascontiguousarray(biases, dtype=np.double)
-            var = num_in_pixels
+                # handle affine layer
+                for i in range(num_out_pixels):
+                    tdim= ElinaDim(var)
+                    linexpr0 = generate_linexpr0(weights[i],biases[i],num_in_pixels)
+                    element = elina_abstract0_assign_linexpr_array(man, True, element, tdim, linexpr0, 1, None)
+                    var+=1
+                dimrem = elina_dimchange_alloc(0,num_in_pixels)
+                for i in range(num_in_pixels):
+                    dimrem.contents.dim[i] = i
+                elina_abstract0_remove_dimensions(man, True, element, dimrem)
+                elina_dimchange_free(dimrem)
 
-            # handle affine layer
-            for i in range(num_out_pixels):
-                tdim= ElinaDim(var)
-                linexpr0 = generate_linexpr0(weights[i],biases[i],num_in_pixels)
-                element = elina_abstract0_assign_linexpr_array(man, True, element, tdim, linexpr0, 1, None)
-                var+=1
-            dimrem = elina_dimchange_alloc(0,num_in_pixels)
-            for i in range(num_in_pixels):
-                dimrem.contents.dim[i] = i
-            elina_abstract0_remove_dimensions(man, True, element, dimrem)
-            elina_dimchange_free(dimrem)
+                # handle ReLU layer
+                if(nn.layertypes[layerno]=='ReLU'):
+                    element = relu_box_layerwise(man,True,element,0, num_out_pixels)
 
-            # handle ReLU layer
-            if(nn.layertypes[layerno]=='ReLU'):
-                element = relu_box_layerwise(man,True,element,0, num_out_pixels)
-
-            nn.ffn_counter+=1
+                nn.ffn_counter+=1
 
         else:
            print('net type not supported')
