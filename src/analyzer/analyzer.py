@@ -127,8 +127,8 @@ def generate_linexpr0(weights, bias, size):
 #Extract the current bounds of the neurons zi of the all current forward layer
 def extract_xi_bounds(man, element, num_in_pixels):
 
-    lower_bounds = numpy.zeros(num_in_pixels)
-    upper_bounds = numpy.zeros(num_in_pixels)
+    lower_bounds = np.zeros(num_in_pixels)
+    upper_bounds = np.zeros(num_in_pixels)
     bounds = elina_abstract0_to_box(man,element)
     
     for idx in range(num_in_pixels):
@@ -197,13 +197,6 @@ def inject_zj_bounds(man, element, idx_zjs, lower_bounds, upper_bounds):
 
     return element, man
 
-def get_weights_to_jneuron(weights, weights_j, j):
-    idx_neuron=0
-    for weights_neuron in weights:
-        weights_j[idx_neuron]=weights_neuron[idx_neuron][j]
-        idx_neuron+=1
-    return weights_j
-
 def analyze(nn, LB_N0, UB_N0, label):   
     num_pixels = len(LB_N0)
     nn.ffn_counter = 0
@@ -233,18 +226,17 @@ def analyze(nn, LB_N0, UB_N0, label):
             dimadd = elina_dimchange_alloc(0,num_out_pixels)
 
             #TODO: to complete
-            #if(layerno == 0):
-            #    zj_lbs = np.array(num_out_pixels)
-            #    zj_ubs = np.array(num_out_pixels)
-            #    xi_lbounds, xi_ubounds = extract_xi_bounds(man,element,num_in_pixels)
-            #    weights_j = np.array(num_in_pixels)
-            #    for j in range(num_out_pixels):
-            #        weights_j = get_weights_to_jneuron(weights, weights_j, j)
-            #        zj_lb, zj_up = solvers.bounds_linear_solver_neuronwise(weights_j, biases[j], xi_lbounds, xi_ubounds)
-            #        zj_lbs[j] = zj_lb 
-            #        zj_ubs[j] = zj_ub        
-            #    element, man = inject_zj_bounds(man, element, num_out_pixels, lower_bounds = zj_lbs, upper_bounds = zj_ubs ):
-            #else:
+            """if(layerno == 0):
+                zj_lbs = np.array(num_out_pixels)
+                zj_ubs = np.array(num_out_pixels)
+                xi_lbounds, xi_ubounds = extract_xi_bounds(man,element,num_in_pixels)
+                weights_j = np.array(range(num_in_pixels))
+                for j in range(num_out_pixels):
+                    zj_lb, zj_up = solvers.bounds_linear_solver_neuronwise(weights[j], biases[j], xi_lbounds, xi_ubounds)
+                    zj_lbs[j] = zj_lb 
+                    zj_ubs[j] = zj_ub        
+                element, man = inject_zj_bounds(man, element, num_out_pixels, lower_bounds = zj_lbs, upper_bounds = zj_ubs ):
+            else:"""
 
             for i in range(num_out_pixels):
                 dimadd.contents.dim[i] = num_in_pixels
