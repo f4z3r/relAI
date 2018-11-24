@@ -4,7 +4,7 @@ from gurobipy import *
 
 """Module containing helper functions use to solve linear optimisations."""
 
-def linear_solver_layerwise(weights, biases, l_bounds, u_bounds, neurons_next_l):
+def linear_solver_layerwise(weights, biases, xi_lbounds, xi_ubounds, neurons_next_l):
 
     #TODO: to complete (objective)
 
@@ -16,14 +16,14 @@ def linear_solver_layerwise(weights, biases, l_bounds, u_bounds, neurons_next_l)
 
     #Create gurobipy linear solver
     m = Model("layerwise_linear_solver")
-    n_bounds = l_bounds.shape()[0]
+    n_bounds = xi_lbounds.shape[0]
 
     #Create variables and constraints of linear solver
     for i in range(n_bounds):
 
         x_i="x"+str(i)
         #xi >= lower bound && xi <= upper bound
-        m.addVar(lb=l_bounds[i], ub=u_bounds[i], vtype=GRB.CONTINUOUS, name=x_i )
+        m.addVar(lb=xi_lbounds[i], ub=xi_ubounds[i], vtype=GRB.CONTINUOUS, name=x_i )
 
     #TODO: sum of all z_i objective ? Maybe wrong objective
     z_i_sum=LinExpr()
@@ -55,21 +55,23 @@ def linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
 
     #Create gurobipy linear solver
     m = Model("neuronwise_linear_solver")
-    n_bounds = l_bounds.shape()[0]
+    n_bounds = xi_lbounds.shape[0]
 
     #Create variables and constraints of linear solver
     for i in range(n_bounds):
         x_i="x"+str(i)
         #xi >= lower bound && xi <= upper bound
-        m.addVar(lb=l_bounds[i], ub=u_bounds[i], vtype=GRB.CONTINUOUS, name=x_i )
+        m.addVar(lb=xi_lbounds[i], ub=xi_ubounds[i], vtype=GRB.CONTINUOUS, name=x_i )
 
     #z next layer neuron output
     z = LinExpr()
 
     #z = sum(wi*xi)
     for i in range(n_bounds):
-        z += weights[i] * m.getVarByName("x"+str(i))
-    z += bias
+        # TODO this currently fails with an error saying the variable name cannot be retrieved
+        # z += weights[i] * m.getVarByName("x"+str(i))
+        pass
+    # z += bias  # TODO commented out to not fail because of above comment.
 
     return m, z
 
@@ -94,18 +96,18 @@ def bounds_linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
     model, z = linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds)
 
     #Find upper bound of the neuron z
-    model.SetObjective(z, GRB.MAXIMIZE)
+    # model.setObjective(z, GRB.MAXIMIZE)
     model.optimize()
     #Applying ReLU on neuron_ub
-    neuron_ub = z.X if z.X > 0 else 0
+    # neuron_ub = z.X if z.X > 0 else 0    # TODO z (gurobipy.LinExpr) has not attribute `.X`.
 
     model.reset(0)
 
     #Find lower bound of the neuron z
-    model.SetObjective(z, GRB.MINIMIZE)
+    model.setObjective(z, GRB.MINIMIZE)
     model.optimize()
     #Applying ReLU on neuron_lb
-    neuron_lb = z.X if z.X > 0 else 0
+    # neuron_lb = z.X if z.X > 0 else 0     # TODO z (gurobipy.LinExpr) has not attribute `.X`.
 
     return neuron_lb,neuron_ub
 
