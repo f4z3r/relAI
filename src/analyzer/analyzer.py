@@ -91,7 +91,7 @@ def parse_net(text):
         else:
             raise Exception('parse error: '+lines[i])
     return res
-   
+
 def parse_spec(text):
     text = text.replace("[", "")
     text = text.replace("]", "")
@@ -107,7 +107,7 @@ def get_perturbed_image(x, epsilon):
     num_pixels = len(image)
     LB_N0 = image - epsilon
     UB_N0 = image + epsilon
-     
+
     for i in range(num_pixels):
         if(LB_N0[i] < 0):
             LB_N0[i] = 0
@@ -197,10 +197,11 @@ def inject_zj_bounds(man, element, idx_zjs, lower_bounds, upper_bounds):
 
     return element, man
 
-def analyze(nn, LB_N0, UB_N0, label):   
+def analyze(nn, LB_N0, UB_N0, label):
+
     num_pixels = len(LB_N0)
     nn.ffn_counter = 0
-    numlayer = nn.numlayer 
+    numlayer = nn.numlayer
     man = elina_box_manager_alloc()
     print("Number of pixels -> ",num_pixels)
     itv = elina_interval_array_alloc(num_pixels)
@@ -212,6 +213,7 @@ def analyze(nn, LB_N0, UB_N0, label):
     elina_interval_array_free(itv,num_pixels)
     for layerno in range(numlayer):
         if(nn.layertypes[layerno] in ['ReLU', 'Affine']):
+
             weights = nn.weights[nn.ffn_counter]
             biases = nn.biases[nn.ffn_counter]
 
@@ -266,15 +268,15 @@ def analyze(nn, LB_N0, UB_N0, label):
 
         else:
            print('net type not supported')
-   
+            
     dims = elina_abstract0_dimension(man,element)
     output_size = dims.intdim + dims.realdim
     # get bounds for each output neuron
     bounds = elina_abstract0_to_box(man,element)
 
-           
-    # if epsilon is zero, try to classify else verify robustness 
-    
+
+    # if epsilon is zero, try to classify else verify robustness
+
     verified_flag = True
     predicted_label = 0
     if(LB_N0[0]==UB_N0[0]):
@@ -289,7 +291,7 @@ def analyze(nn, LB_N0, UB_N0, label):
                       break
             if(flag):
                 predicted_label = i
-                break    
+                break
     else:
         inf = bounds[label].contents.inf.contents.val.dbl
         for j in range(output_size):
@@ -302,7 +304,7 @@ def analyze(nn, LB_N0, UB_N0, label):
 
     elina_interval_array_free(bounds,output_size)
     elina_abstract0_free(man,element)
-    elina_manager_free(man)        
+    elina_manager_free(man)
     return predicted_label, verified_flag
 
 
@@ -325,7 +327,8 @@ if __name__ == '__main__':
     nn = parse_net(netstring)
     x0_low, x0_high = parse_spec(specstring)
     LB_N0, UB_N0 = get_perturbed_image(x0_low,0)    # get original image
-    
+
+    return_code = 3
     label, _ = analyze(nn,LB_N0,UB_N0,0)            # get actual prediction without perturbation
     start = time.time()
     if(label==int(x0_low[0])):
@@ -333,11 +336,14 @@ if __name__ == '__main__':
         _, verified_flag = analyze(nn,LB_N0,UB_N0,label)    # get prediction on perturbed image
         if(verified_flag):
             print("verified")
+            return_code = 0
         else:
-            print("can not be verified")  
+            print("can not be verified")
+            return_code = 1
     else:
         print("image not correctly classified by the network. expected label ",int(x0_low[0]), " classified label: ", label)
     end = time.time()
     print("analysis time: ", (end-start), " seconds")
-    
+    exit(return_code)
+
 
