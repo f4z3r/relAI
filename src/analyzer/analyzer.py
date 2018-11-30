@@ -19,6 +19,7 @@ from gurobipy import *
 import time
 
 import solver_functions as solvers
+import analyzer_gurobi as my_analyzer
 
 libc = CDLL(find_library('c'))
 cstdout = c_void_p.in_dll(libc, 'stdout')
@@ -225,51 +226,36 @@ def analyze(nn, LB_N0, UB_N0, label):
             num_out_pixels = len(weights)
             dimadd = elina_dimchange_alloc(0,num_out_pixels)
 
-            #TODO: to test and complete, first the neuronwise LP solver, then try the layerwise one
-            if(layerno == 0):
-            #if(False):#layerno == 0):
-                zj_lbs = np.zeros(num_out_pixels)
-                zj_ubs = np.zeros(num_out_pixels)
-                xi_lbounds, xi_ubounds = extract_xi_bounds(man,element,num_in_pixels)
-                weights_j = np.array(range(num_in_pixels))
-                for j in range(num_out_pixels):
-                    zj_lb, zj_ub = solvers.get_bounds_linear_solver_neuronwise(weights[j], biases[j], xi_lbounds, xi_ubounds)
-                    zj_lbs[j] = zj_lb
-                    zj_ubs[j] = zj_ub
-                element, man = inject_zj_bounds(man = man, element = element, idx_zjs = [i for i in range(num_out_pixels)], lower_bounds=zj_lbs, upper_bounds=zj_ubs)
-            
-            else:
+            for i in range(num_out_pixels):
+                dimadd.contents.dim[i] = num_in_pixels
 
-                for i in range(num_out_pixels):
-                    dimadd.contents.dim[i] = num_in_pixels
+            elina_abstract0_add_dimensions(man, True, element, dimadd, False)
+            elina_dimchange_free(dimadd)
+            np.ascontiguousarray(weights, dtype=np.double)
+            np.ascontiguousarray(biases, dtype=np.double)
+            var = num_in_pixels
 
-                elina_abstract0_add_dimensions(man, True, element, dimadd, False)
-                elina_dimchange_free(dimadd)
-                np.ascontiguousarray(weights, dtype=np.double)
-                np.ascontiguousarray(biases, dtype=np.double)
-                var = num_in_pixels
+            # handle affine layer
+            for i in range(num_out_pixels):
+                tdim= ElinaDim(var)
+                linexpr0 = generate_linexpr0(weights[i],biases[i],num_in_pixels)
+                element = elina_abstract0_assign_linexpr_array(man, True, element, tdim, linexpr0, 1, None)
+                var+=1
 
-                # handle affine layer
-                for i in range(num_out_pixels):
-                    tdim= ElinaDim(var)
-                    linexpr0 = generate_linexpr0(weights[i],biases[i],num_in_pixels)
-                    element = elina_abstract0_assign_linexpr_array(man, True, element, tdim, linexpr0, 1, None)
-                    var+=1
+            dimrem = elina_dimchange_alloc(0,num_in_pixels)
+            for i in range(num_in_pixels):
+                dimrem.contents.dim[i] = i
 
-                dimrem = elina_dimchange_alloc(0,num_in_pixels)
-                for i in range(num_in_pixels):
-                    dimrem.contents.dim[i] = i
+            elina_abstract0_remove_dimensions(man, True, element, dimrem)
+            elina_dimchange_free(dimrem)
 
-                elina_abstract0_remove_dimensions(man, True, element, dimrem)
-                elina_dimchange_free(dimrem)
+            # handle ReLU layer
+            #TODO currently core dumping here after first layer went through look for elina_box.py
+            print("Here right before core dumping in layer ", layerno)
+            if(nn.layertypes[layerno]=='ReLU'):
+                element = relu_box_layerwise(man,True,element,0, num_out_pixels)
 
-                # handle ReLU layer
-                #TODO currently core dumping here after first layer went through
-                print("Here right before core dumping in layer ", layerno)
-                if(nn.layertypes[layerno]=='ReLU'):
-                    element = relu_box_layerwise(man,True,element,0, num_out_pixels)
-
-                nn.ffn_counter+=1
+            nn.ffn_counter+=1
 
         else:
            print('net type not supported')
@@ -334,15 +320,14 @@ if __name__ == '__main__':
     LB_N0, UB_N0 = get_perturbed_image(x0_low,0)    # get original image
 
     return_code = 3
-    #label, _ = analyze(nn,LB_N0,UB_N0,0)            # get actual prediction without perturbation
+    label, _ = analyze(nn,LB_N0,UB_N0,0)            # get actual prediction without perturbation
     #print("LABEL ",label)
-    label = 4
     start = time.time()
     print("Perturbing and analyzing")
     if(label==int(x0_low[0])):
         print("Starting analysis")
         LB_N0, UB_N0 = get_perturbed_image(x0_low,epsilon)  # get perturbed image
-        _, verified_flag = analyze(nn,LB_N0,UB_N0,label)    # get prediction on perturbed image
+        _, verified_flag = my_analyzer.analyze_gurobi(nn,LB_N0,UB_N0,label)    # get prediction on perturbed image
         if(verified_flag):
             print("verified")
             return_code = 0
