@@ -131,6 +131,26 @@ def generate_linexpr0(weights, bias, size):
     return linexpr0
 
 
+def el_bounds_to_list(bounds, bounds_size):
+    """"Converts ELINA bounds to two list of bounds, containing the lower and
+    upper bounds respectively.
+
+    Args:
+        - bounds: the ELINA bounds to convert
+        - bounds_size: the size of the ELINA bounds.
+
+    Returns:
+        The lower and upper bounds of the corresponding ELINA bounds.
+    """
+    lbounds = []
+    ubounds = []
+    for i in range(bounds_size):
+        lbounds.append(bounds[i].contents.inf.contents.val.dbl)
+        ubounds.append(bounds[i].contents.sup.contents.val.dbl)
+    elina_interval_array_free(bounds, bounds_size)
+    return lbounds, ubounds
+
+
 def interval_propagation_el_bounds(nn, man, bounds_size, bounds, layer_start,
                                    layer_stop):
     """Performs an interval propagation similar to `interval_propagation` but
@@ -149,14 +169,10 @@ def interval_propagation_el_bounds(nn, man, bounds_size, bounds, layer_start,
         The dimensions of the bounds of the last propagated layer as well as
         the bounds themselves.
     """
-    lbounds = []
-    ubounds = []
-    for i in range(bounds_size):
-        lbounds.append(bounds[i].contents.inf.contents.val.dbl)
-        ubounds.append(bounds[i].contents.sup.contents.val.dbl)
-    output_size, bounds = interval_propagation(nn, man, lbounds, ubounds,
+    lbounds, ubounds = el_bounds_to_list(bounds, bounds_size)
+    bounds_size, bounds = interval_propagation(nn, man, lbounds, ubounds,
                                                layer_start, layer_stop)
-    return output_size, bounds
+    return bounds_size, bounds
 
 
 def interval_propagation(nn, man, lbounds, ubounds, layer_start, layer_stop):
@@ -237,11 +253,32 @@ def interval_propagation(nn, man, lbounds, ubounds, layer_start, layer_stop):
 
     # return upper and lower bounds
     dims = elina_abstract0_dimension(man, element)
-    output_size = dims.intdim + dims.realdim
+    bounds_size = dims.intdim + dims.realdim
     bounds = elina_abstract0_to_box(man,element)
     # free the element
     elina_abstract0_free(man,element)
-    return output_size, bounds
+    return bounds_size, bounds
+
+
+def lp_propagate_layers(nn, lbounds, ubounds, layer_start, layer_stop):
+    """Uses linear programming to propagate weights from a starting layer to
+    the stopping layer.
+
+    Args:
+        - nn: the neural network over which to propagate the bounds
+        - lbounds: the lower bounds to inject in the first layer on which the
+          linear programming is performed
+        - ubounds: the upper bounds to inject in the first layer on which the
+          linear programming is performed
+        - layer_start: the first layer to perform the interval propagation on
+        - layer_stop: the last layer to perform the interval propagation on
+
+
+    Returns:
+        Two lists representing the lower and upper bounds of the output
+        layer.
+    """
+    pass
 
 
 def analyze(nn, LB_N0, UB_N0, label):
@@ -251,19 +288,19 @@ def analyze(nn, LB_N0, UB_N0, label):
     man = elina_box_manager_alloc()
 
     # propagate intervals
-    output_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0, 0,
+    bounds_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0, 0,
                                                numlayer)
-    # output_size, bounds = interval_propagation_el_bounds(nn, man, output_size,
-                                                         # bounds, 5, numlayer)
+    # bounds_size, bounds = interval_propagation_el_bounds(nn, man, bounds_size,
+                                                         # bounds, 4, numlayer)
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True
     predicted_label = 0
     if(LB_N0[0]==UB_N0[0]):
-        for i in range(output_size):
+        for i in range(bounds_size):
             inf = bounds[i].contents.inf.contents.val.dbl
             flag = True
-            for j in range(output_size):
+            for j in range(bounds_size):
                 if(j!=i):
                    sup = bounds[j].contents.sup.contents.val.dbl
                    if(inf<=sup):
@@ -274,7 +311,7 @@ def analyze(nn, LB_N0, UB_N0, label):
                 break
     else:
         inf = bounds[label].contents.inf.contents.val.dbl
-        for j in range(output_size):
+        for j in range(bounds_size):
             if(j!=label):
                 sup = bounds[j].contents.sup.contents.val.dbl
                 if(inf<=sup):
@@ -282,7 +319,7 @@ def analyze(nn, LB_N0, UB_N0, label):
                     verified_flag = False
                     break
 
-    elina_interval_array_free(bounds, output_size)
+    elina_interval_array_free(bounds, bounds_size)
     elina_manager_free(man)
     return predicted_label, verified_flag
 
@@ -311,7 +348,6 @@ if __name__ == '__main__':
     # get actual prediction without perturbation
     label, _ = analyze(nn,LB_N0,UB_N0,0)
     start = time.time()
-    print("Perturbing and analyzing")
     if(label==int(x0_low[0])):
         # get perturbed image
         LB_N0, UB_N0 = get_perturbed_image(x0_low, epsilon)
