@@ -287,34 +287,41 @@ def analyze(nn, LB_N0, UB_N0, label):
     numlayer = nn.numlayer
     man = elina_box_manager_alloc()
 
-    # propagate intervals
-    bounds_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0, 0,
-                                               numlayer)
-    # bounds_size, bounds = interval_propagation_el_bounds(nn, man, bounds_size,
-                                                         # bounds, 4, numlayer)
+    # if prediction perform interval analysis
+    if LB_N0[0] == UB_N0[0]:
+        bounds_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0, 0,
+                                                   numlayer)
+    # else perform actual robustness analysis
+    else:
+        # propagate intervals
+        print(len(LB_N0))
+        bounds_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0, 0, 1)
+        print(bounds_size)
+        bounds_size, bounds = interval_propagation_el_bounds(
+            nn, man, bounds_size, bounds, 1, numlayer)
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True
     predicted_label = 0
-    if(LB_N0[0]==UB_N0[0]):
+    if LB_N0[0] == UB_N0[0]:
         for i in range(bounds_size):
             inf = bounds[i].contents.inf.contents.val.dbl
             flag = True
             for j in range(bounds_size):
-                if(j!=i):
+                if j != i:
                    sup = bounds[j].contents.sup.contents.val.dbl
                    if(inf<=sup):
                       flag = False
                       break
-            if(flag):
+            if flag:
                 predicted_label = i
                 break
     else:
         inf = bounds[label].contents.inf.contents.val.dbl
         for j in range(bounds_size):
-            if(j!=label):
+            if j != label:
                 sup = bounds[j].contents.sup.contents.val.dbl
-                if(inf<=sup):
+                if inf <= sup:
                     predicted_label = label
                     verified_flag = False
                     break
