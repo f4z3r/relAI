@@ -32,14 +32,15 @@ class layers:
         self.numlayer = 0
         self.ffn_counter = 0
 
+
 def parse_bias(text):
     if len(text) < 1 or text[0] != '[':
         raise Exception("expected '['")
     if text[-1] != ']':
         raise Exception("expected ']'")
     v = np.array([*map(lambda x: np.double(x.strip()), text[1:-1].split(','))])
-    #return v.reshape((v.size,1))
     return v
+
 
 def parse_vector(text):
     if len(text) < 1 or text[0] != '[':
@@ -48,7 +49,7 @@ def parse_vector(text):
         raise Exception("expected ']'")
     v = np.array([*map(lambda x: np.double(x.strip()), text[1:-1].split(','))])
     return v.reshape((v.size,1))
-    #return v
+
 
 def balanced_split(text):
     i = 0
@@ -68,6 +69,7 @@ def balanced_split(text):
         result.append(text[start:i])
     return result
 
+
 def parse_matrix(text):
     i = 0
     if len(text) < 1 or text[0] != '[':
@@ -75,6 +77,7 @@ def parse_matrix(text):
     if text[-1] != ']':
         raise Exception("expected ']'")
     return np.array([*map(lambda x: parse_vector(x.strip()).flatten(), balanced_split(text[1:-1]))])
+
 
 def parse_net(text):
     lines = [*filter(lambda x: len(x) != 0, text.split('\n'))]
@@ -93,6 +96,7 @@ def parse_net(text):
             raise Exception('parse error: '+lines[i])
     return res
 
+
 def parse_spec(text):
     text = text.replace("[", "")
     text = text.replace("]", "")
@@ -102,6 +106,7 @@ def parse_spec(text):
     low = np.copy(data[:,0])
     high = np.copy(data[:,1])
     return low,high
+
 
 def get_perturbed_image(x, epsilon):
     image = x[1:len(x)]
@@ -125,76 +130,133 @@ def generate_linexpr0(weights, bias, size):
         elina_linexpr0_set_coeff_scalar_double(linexpr0,i,weights[i])
     return linexpr0
 
+
+def interval_propagation_el_bounds(nn, man, bounds_size, bounds, layer_start,
+                                   layer_stop):
+    """Performs an interval propagation similar to `interval_propagation` but
+    allows to pass elina bounds and their size instead of two lists of upper
+    and lower bounds.
+
+    Args:
+        - nn: the neural network to perform the interval propagation on
+        - man: the elina manager used to manage abstract domains
+        - bounds_size: the size of the input bounds passed
+        - bounds: the elina bounds given an input
+        - layer_start: the first layer on which to apply interval propagation
+        - layer_stop: the last layer on which to apply interval propagation
+
+    Returns:
+        The dimensions of the bounds of the last propagated layer as well as
+        the bounds themselves.
+    """
+    lbounds = []
+    ubounds = []
+    for i in range(bounds_size):
+        lbounds.append(bounds[i].contents.inf.contents.val.dbl)
+        ubounds.append(bounds[i].contents.sup.contents.val.dbl)
+    output_size, bounds = interval_propagation(nn, man, lbounds, ubounds,
+                                               layer_start, layer_stop)
+    return output_size, bounds
+
+
+def interval_propagation(nn, man, lbounds, ubounds, layer_start, layer_stop):
+    """Perform linear interval propagation on the neural network.
+
+    Args:
+        - nn: the neural network to propagate the intervals on
+        - man: the elina manager that manages the abstract domains
+        - lbounds: the lower bounds to inject in the first layer on which the
+          interval propagation is performed
+        - ubounds: the upper bounds to inject in the first layer on which the
+          interval propagation is performed
+        - layer_start: the first layer to perform the interval propagation on
+        - layer_stop: the last layer to perform the interval propagation on
+
+    Returns:
+        The dimensions of the bounds of the last propagated layer as well as
+        the bounds themselves.
+    """
+    assert len(lbounds) == len(ubounds), "bounds must have same length"
+    assert layer_start < layer_stop, "start layer must be before stop layer"
+
+    # inject the bounds into the current layer
+    itv = elina_interval_array_alloc(len(lbounds))
+    for i in range(len(lbounds)):
+        elina_interval_set_double(itv[i], lbounds[i], ubounds[i])
+
+    # inject bounds
+    element = elina_abstract0_of_box(man, 0, len(lbounds), itv)
+    elina_interval_array_free(itv, len(lbounds))
+
+    # compute the interval propagation
+    for layerno in range(layer_start, layer_stop):
+        if(nn.layertypes[layerno] in ['ReLU', 'Affine']):
+            weights = nn.weights[nn.ffn_counter]
+            biases = nn.biases[nn.ffn_counter]
+            # get the domain's dimensions
+            dims = elina_abstract0_dimension(man,element)
+            num_in_pixels = dims.intdim + dims.realdim
+            num_out_pixels = len(weights)
+
+            # allocate space for a change in dimension
+            dimadd = elina_dimchange_alloc(0,num_out_pixels)
+            for i in range(num_out_pixels):
+                dimadd.contents.dim[i] = num_in_pixels
+            # add dimensions based on the changed dimensions dimadd
+            elina_abstract0_add_dimensions(man, True, element, dimadd, False)
+            # free dimadd dimension object as no longer needed
+            elina_dimchange_free(dimadd)
+            # make weights a continuous np array
+            np.ascontiguousarray(weights, dtype=np.double)
+            # make biases a continuous np array
+            np.ascontiguousarray(biases, dtype=np.double)
+            var = num_in_pixels
+            # handle affine layer
+            for i in range(num_out_pixels):
+                tdim= ElinaDim(var)
+                # apply affine transformation ??
+                linexpr0 = generate_linexpr0(weights[i], biases[i],
+                                             num_in_pixels)
+                element = elina_abstract0_assign_linexpr_array(
+                    man, True, element, tdim, linexpr0, 1, None)
+                var+=1
+            dimrem = elina_dimchange_alloc(0, num_in_pixels)
+
+            for i in range(num_in_pixels):
+                dimrem.contents.dim[i] = i
+            elina_abstract0_remove_dimensions(man, True, element, dimrem)
+            elina_dimchange_free(dimrem)
+            # handle ReLU layer
+            if(nn.layertypes[layerno]=='ReLU'):
+                element = relu_box_layerwise(man, True, element, 0,
+                                             num_out_pixels)
+            nn.ffn_counter+=1
+
+        else:
+            print(' net type not supported')
+
+    # return upper and lower bounds
+    dims = elina_abstract0_dimension(man, element)
+    output_size = dims.intdim + dims.realdim
+    bounds = elina_abstract0_to_box(man,element)
+    # free the element
+    elina_abstract0_free(man,element)
+    return output_size, bounds
+
+
 def analyze(nn, LB_N0, UB_N0, label):
     num_pixels = len(LB_N0)
     nn.ffn_counter = 0
     numlayer = nn.numlayer
     man = elina_box_manager_alloc()
-    print("Number of pixels -> ",num_pixels)
-    itv = elina_interval_array_alloc(num_pixels)
-    for i in range(num_pixels):
-        elina_interval_set_double(itv[i],LB_N0[i],UB_N0[i])
 
-    ## construct input abstraction
-    element = elina_abstract0_of_box(man, 0, num_pixels, itv)
-    elina_interval_array_free(itv,num_pixels)
-    for layerno in range(numlayer):
-        if(nn.layertypes[layerno] in ['ReLU', 'Affine']):
-            weights = nn.weights[nn.ffn_counter]
-            biases = nn.biases[nn.ffn_counter]
-
-            print("Layer number -> ",layerno)
-            print("Current layer neurons -> ", len(weights[0]))
-            print("Next layer number of neurons -> ", len(weights))
-            print("Next layer number of biases -> ", len(biases))
-
-            dims = elina_abstract0_dimension(man,element)
-            num_in_pixels = dims.intdim + dims.realdim
-            num_out_pixels = len(weights)
-            dimadd = elina_dimchange_alloc(0,num_out_pixels)
-
-            for i in range(num_out_pixels):
-                dimadd.contents.dim[i] = num_in_pixels
-
-            elina_abstract0_add_dimensions(man, True, element, dimadd, False)
-            elina_dimchange_free(dimadd)
-            np.ascontiguousarray(weights, dtype=np.double)
-            np.ascontiguousarray(biases, dtype=np.double)
-            var = num_in_pixels
-
-            # handle affine layer
-            for i in range(num_out_pixels):
-                tdim= ElinaDim(var)
-                linexpr0 = generate_linexpr0(weights[i],biases[i],num_in_pixels)
-                element = elina_abstract0_assign_linexpr_array(man, True, element, tdim, linexpr0, 1, None)
-                var+=1
-
-            dimrem = elina_dimchange_alloc(0,num_in_pixels)
-            for i in range(num_in_pixels):
-                dimrem.contents.dim[i] = i
-
-            elina_abstract0_remove_dimensions(man, True, element, dimrem)
-            elina_dimchange_free(dimrem)
-
-            # handle ReLU layer
-            #TODO currently core dumping here after first layer went through look for elina_box.py
-            print("Here right before core dumping in layer ", layerno)
-            if(nn.layertypes[layerno]=='ReLU'):
-                element = relu_box_layerwise(man,True,element,0, num_out_pixels)
-
-            nn.ffn_counter+=1
-
-        else:
-           print('net type not supported')
-
-    dims = elina_abstract0_dimension(man,element)
-    output_size = dims.intdim + dims.realdim
-    # get bounds for each output neuron
-    bounds = elina_abstract0_to_box(man,element)
-
+    # propagate intervals
+    output_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0, 0,
+                                               numlayer)
+    # output_size, bounds = interval_propagation_el_bounds(nn, man, output_size,
+                                                         # bounds, 5, numlayer)
 
     # if epsilon is zero, try to classify else verify robustness
-
     verified_flag = True
     predicted_label = 0
     if(LB_N0[0]==UB_N0[0]):
@@ -220,8 +282,7 @@ def analyze(nn, LB_N0, UB_N0, label):
                     verified_flag = False
                     break
 
-    elina_interval_array_free(bounds,output_size)
-    elina_abstract0_free(man,element)
+    elina_interval_array_free(bounds, output_size)
     elina_manager_free(man)
     return predicted_label, verified_flag
 
@@ -247,14 +308,15 @@ if __name__ == '__main__':
     LB_N0, UB_N0 = get_perturbed_image(x0_low,0)    # get original image
 
     return_code = 3
-    label, _ = analyze(nn,LB_N0,UB_N0,0)            # get actual prediction without perturbation
-    #print("LABEL ",label)
+    # get actual prediction without perturbation
+    label, _ = analyze(nn,LB_N0,UB_N0,0)
     start = time.time()
     print("Perturbing and analyzing")
     if(label==int(x0_low[0])):
-        print("Starting analysis")
-        LB_N0, UB_N0 = get_perturbed_image(x0_low,epsilon)  # get perturbed image
-        _, verified_flag = my_analyzer.analyze_gurobi(nn,LB_N0,UB_N0,label)    # get prediction on perturbed image
+        # get perturbed image
+        LB_N0, UB_N0 = get_perturbed_image(x0_low, epsilon)
+        # get prediction on perturbed image
+        _, verified_flag = analyze(nn, LB_N0, UB_N0, label)
         if(verified_flag):
             print("verified")
             return_code = 0
@@ -262,9 +324,8 @@ if __name__ == '__main__':
             print("can not be verified")
             return_code = 1
     else:
-        print("image not correctly classified by the network. expected label ",int(x0_low[0]), " classified label: ", label)
+        print("image not correctly classified by the network. expected label ",
+              int(x0_low[0]), " classified label: ", label)
     end = time.time()
     print("analysis time: ", (end-start), " seconds")
     exit(return_code)
-
-

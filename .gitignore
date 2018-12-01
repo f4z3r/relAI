@@ -10,6 +10,9 @@ ENV/
 env.bak/
 venv.bak/
 
+# Transitory files
+.#*
+
 # py
 __pycache__/
 *.py[cod]
