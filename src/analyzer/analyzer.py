@@ -18,8 +18,6 @@ from ctypes.util import find_library
 from gurobipy import *
 import time
 
-import solver_functions as solvers
-import analyzer_gurobi as my_analyzer
 
 libc = CDLL(find_library('c'))
 cstdout = c_void_p.in_dll(libc, 'stdout')
@@ -207,8 +205,8 @@ def interval_propagation(nn, man, lbounds, ubounds, layer_start, layer_stop):
     # compute the interval propagation
     for layerno in range(layer_start, layer_stop):
         if(nn.layertypes[layerno] in ['ReLU', 'Affine']):
-            weights = nn.weights[nn.ffn_counter]
-            biases = nn.biases[nn.ffn_counter]
+            weights = nn.weights[layerno]
+            biases = nn.biases[layerno]
             # get the domain's dimensions
             dims = elina_abstract0_dimension(man,element)
             num_in_pixels = dims.intdim + dims.realdim
@@ -260,25 +258,157 @@ def interval_propagation(nn, man, lbounds, ubounds, layer_start, layer_stop):
     return bounds_size, bounds
 
 
-def lp_propagate_layers(nn, lbounds, ubounds, layer_start, layer_stop):
-    """Uses linear programming to propagate weights from a starting layer to
-    the stopping layer.
+def get_relu_bounds(weights, biases, lbounds, ubounds):
+    """"Computes the relu bounds for a layer in the neural network.
 
     Args:
-        - nn: the neural network over which to propagate the bounds
+        - weights: the weights between the current layer and the previous one
+        - biases: the biases of the current layer
+        - lbounds: the lower bounds of the neurons of the layer previous to the
+          one on which the relu bounds are computed
+        - ubounds: the upper bounds of the neurons of the layer previous to the
+          one on which the relu bounds are computed
+
+    Returns:
+        A list of the lower bounds and a list of the upper bounds of the affine
+        transformations on the `layer` given in the argumens.
+    """
+    assert len(lbounds) == len(ubounds), "bounds should have the same length"
+    relu_lbounds = []
+    relu_ubounds = []
+    for neuron, neuron_weights in enumerate(weights):
+        bias = biases[neuron]
+        min_val = bias
+        max_val = bias
+        for prev_neuron, weight in enumerate(neuron_weights):
+            if weight >= 0:
+                min_val += weight * lbounds[prev_neuron]
+                max_val += weight * ubounds[prev_neuron]
+            else:
+                min_val += weight * ubounds[prev_neuron]
+                max_val += weight * lbounds[prev_neuron]
+        relu_lbounds.append(min_val)
+        relu_ubounds.append(max_val)
+    return relu_lbounds, relu_ubounds
+
+
+def linear_solver_layerwise(nn, man, lbounds, ubounds, layer_start, layer_stop,
+                            timeout):
+    """Builds a linear model of the contraints for a specified number of layers
+    for a neural network.
+
+    Args:
+        - nn: the neural network to perform linear programming on
+        - man: the elina manager that manages the abstract domains
         - lbounds: the lower bounds to inject in the first layer on which the
           linear programming is performed
         - ubounds: the upper bounds to inject in the first layer on which the
           linear programming is performed
-        - layer_start: the first layer to perform the interval propagation on
-        - layer_stop: the last layer to perform the interval propagation on
-
+        - layer_start: the first layer to perform the linear programming on
+        - layer_stop: the last layer to perform the linear programming on
+        - timeout: the timeout in seconds for each solving; note that the
+          solver is actually called many times to solve the layers
 
     Returns:
-        Two lists representing the lower and upper bounds of the output
-        layer.
+        The dimensions of the bounds of the last propagated layer as well as
+        the bounds themselves.
+
+    Notes:
+        This currently solves the ReLU in the last layer as well using linear
+        programming. This is not necessary, as only the affine computation
+        can be used and the ReLU can be computed manually in order to make the
+        solving slightly faster. (I am not sure if this will actually have a
+        significant impact on performance, but it will surely not be a bad
+        idea).
     """
-    pass
+    assert len(lbounds) == len(ubounds), "bounds should have the same length"
+    assert layer_start < layer_stop, "start layer must be before stop layer"
+
+    # create gurobi linear model
+    m = Model("layerwise_linear_solver")
+    m.setParam("OutputFlag", False)
+    m.setParam("TimeLimit", timeout)
+
+    # create box constraints on input to initial layer
+    for neuron, (lb, ub) in enumerate(zip(lbounds, ubounds)):
+        if ub > 0:
+            neuron_name = f"x{layer_start-1}_{neuron}"
+            neuron_var = m.addVar(lb=lb, ub=ub, name=neuron_name)
+
+    m.update()   # process pending modifications
+
+    # for each layer, add the constraints
+    for layer in range(layer_start, layer_stop):
+        weights = nn.weights[layer] # weights for each neuron in this layer
+        biases = nn.biases[layer]   # biases of each neuron in this layer
+
+        # compute interval bounds on layer
+        prev_lbounds, prev_ubounds = lbounds, ubounds
+        bound_size, bounds = interval_propagation(nn, man, lbounds, ubounds,
+                                                  layer, layer+1)
+        lbounds, ubounds = el_bounds_to_list(bounds, bound_size)
+        relu_lbnds, relu_ubnds = get_relu_bounds(weights, biases, prev_lbounds,
+                                                 prev_ubounds)
+
+        # loop over neuron in next layer to set contraints
+        for neuron, neuron_weights in enumerate(weights):
+            lb = lbounds[neuron]
+            ub = ubounds[neuron]
+
+            # if neuron zero anyways, skip it
+            if not ub > 0:
+                continue
+
+            # create the neuron value
+            neuron_name = f"x{layer}_{neuron}"
+            neuron_var = m.addVar(lb=lb, ub=ub, name=neuron_name)
+
+            affine_sum = LinExpr(biases[neuron])
+            # build affine sum
+            for prev_neuron, synapse in enumerate(neuron_weights):
+                # only add the neuron if it contributes
+                if prev_ubounds[prev_neuron] > 0 and synapse != 0:
+                    prev_neuron_name = f"x{layer-1}_{prev_neuron}"
+                    affine_sum += synapse * m.getVarByName(prev_neuron_name)
+
+            if nn.layertypes[layer] == "Affine" or lb > 0:
+                m.addConstr(neuron_var, GRB.EQUAL, affine_sum)
+            if nn.layertypes[layer] == "ReLU":
+                # ReLU(z) >= z
+                m.addConstr(neuron_var, GRB.GREATER_EQUAL, affine_sum)
+                # ReLU(z) <= (ub_z / ub_z - lb_z) * z +\
+                #            (ub_z * lb_z / lb_z - ub_z)
+                rub = relu_ubnds[neuron]
+                rlb = relu_lbnds[neuron]
+                rhs = LinExpr()
+                rhs += (rub / (rub - rlb)) * (affine_sum)
+                rhs += ((rub * rlb) / (rlb - rub))
+                m.addConstr(neuron_var, GRB.LESS_EQUAL, rhs)
+            else:
+                print("layer type not supported")
+
+        # make neuron vars available for constraint building in next layer
+        m.update()
+
+    # all layers built, compute value of layer_stop - 1
+    curr_lbounds, curr_ubounds = lbounds, ubounds
+    lbounds = []
+    ubounds = []
+    for neuron in range(len(nn.weights[layer_stop-1])):
+        if curr_ubounds[neuron] > 0:
+            neuron_name = f"x{layer_stop-1}_{neuron}"
+            m.setObjective(m.getVarByName(neuron_name), GRB.MAXIMIZE)
+            m.optimize()
+            ubounds.append(m.getVarByName(neuron_name).X)
+            m.reset(0)
+            m.setObjective(m.getVarByName(neuron_name), GRB.MINIMIZE)
+            m.optimize()
+            lbounds.append(m.getVarByName(neuron_name).X)
+        else:
+            ubounds.append(0)
+            lbounds.append(0)
+
+    return lbounds, ubounds
 
 
 def analyze(nn, LB_N0, UB_N0, label):
@@ -289,27 +419,30 @@ def analyze(nn, LB_N0, UB_N0, label):
 
     # if prediction perform interval analysis
     if LB_N0[0] == UB_N0[0]:
-        bounds_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0, 0,
-                                                   numlayer)
+        bounds_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0,
+                                                   0, numlayer)
+        lbounds, ubounds = el_bounds_to_list(bounds, bounds_size)
     # else perform actual robustness analysis
     else:
-        # propagate intervals
-        print(len(LB_N0))
-        bounds_size, bounds = interval_propagation(nn, man, LB_N0, UB_N0, 0, 1)
-        print(bounds_size)
-        bounds_size, bounds = interval_propagation_el_bounds(
-            nn, man, bounds_size, bounds, 1, numlayer)
+        # use linear programming on two first layers (1 sec timeout)
+        lbounds, ubounds = linear_solver_layerwise(nn, man, LB_N0, UB_N0,
+                                                   0, 2, 1)
+
+        # continue with interval propagation to verify robustness
+        bounds_size, bounds = interval_propagation(nn, man, lbounds, ubounds,
+                                                   2, numlayer)
+        lbounds, ubounds = el_bounds_to_list(bounds, bounds_size)
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True
     predicted_label = 0
     if LB_N0[0] == UB_N0[0]:
-        for i in range(bounds_size):
-            inf = bounds[i].contents.inf.contents.val.dbl
+        for i in range(len(lbounds)):
+            inf = lbounds[i]
             flag = True
-            for j in range(bounds_size):
+            for j in range(len(ubounds)):
                 if j != i:
-                   sup = bounds[j].contents.sup.contents.val.dbl
+                   sup = ubounds[j]
                    if(inf<=sup):
                       flag = False
                       break
@@ -317,16 +450,15 @@ def analyze(nn, LB_N0, UB_N0, label):
                 predicted_label = i
                 break
     else:
-        inf = bounds[label].contents.inf.contents.val.dbl
-        for j in range(bounds_size):
+        inf = lbounds[label]
+        for j in range(len(ubounds)):
             if j != label:
-                sup = bounds[j].contents.sup.contents.val.dbl
+                sup = ubounds[j]
                 if inf <= sup:
                     predicted_label = label
                     verified_flag = False
                     break
 
-    elina_interval_array_free(bounds, bounds_size)
     elina_manager_free(man)
     return predicted_label, verified_flag
 
@@ -334,6 +466,29 @@ def analyze(nn, LB_N0, UB_N0, label):
 
 if __name__ == '__main__':
     from sys import argv
+
+    # TODO remove =================================================
+
+    # if len(argv) > 1 and argv[1] == "test":
+    #     nn = layers()
+    #     nn.biases = [[0.1, -0.5, 1.2],
+    #                  [0, -0.2],
+    #                  [0.5]]
+    #     nn.weights = [[[0.2, 0.5, -1], [1.5, -0.2, 0.2], [0.7, 0.1, 0]],
+    #                   [[-2, -1.5, 0.1], [0, -0.2, 3]],
+    #                   [[-0.2, 0.4]]]
+    #     nn.layertypes = ["ReLU", "ReLU", "ReLU"]
+    #     nn.numlayer = 3
+
+    #     lbounds = [-0.0, 0.5, 0.2]
+    #     ubounds = [0.5, 0.7, 0.3]
+
+    #     analyze(nn, lbounds, ubounds, 0)
+
+        # TODO
+    # =============================================================
+
+
     if len(argv) < 3 or len(argv) > 4:
         print('usage: python3.6 ' + argv[0] + ' net.txt spec.txt [timeout]')
         exit(1)

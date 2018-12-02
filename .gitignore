@@ -13,6 +13,9 @@ venv.bak/
 # Transitory files
 .#*
 
+# Gurobi logs
+*.log
+
 # py
 __pycache__/
 *.py[cod]
@@ -20,4 +23,3 @@ __pycache__/
 
 # dummy ignore dummy object created by analyzer
 /src/analyzer/dummy
-
