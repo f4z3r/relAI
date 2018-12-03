@@ -327,6 +327,7 @@ def linear_solver_layerwise(nn, man, lbounds, ubounds, layer_start, layer_stop,
     # create gurobi linear model
     m = Model("layerwise_linear_solver")
     m.setParam("OutputFlag", False)
+    m.setParam("Presolve", 2)
     m.setParam("TimeLimit", timeout)
 
     # create box constraints on input to initial layer
@@ -373,7 +374,7 @@ def linear_solver_layerwise(nn, man, lbounds, ubounds, layer_start, layer_stop,
 
             if nn.layertypes[layer] == "Affine" or lb > 0:
                 m.addConstr(neuron_var, GRB.EQUAL, affine_sum)
-            if nn.layertypes[layer] == "ReLU":
+            elif nn.layertypes[layer] == "ReLU":
                 # ReLU(z) >= z
                 m.addConstr(neuron_var, GRB.GREATER_EQUAL, affine_sum)
                 # ReLU(z) <= (ub_z / ub_z - lb_z) * z +\
@@ -400,7 +401,6 @@ def linear_solver_layerwise(nn, man, lbounds, ubounds, layer_start, layer_stop,
             m.setObjective(m.getVarByName(neuron_name), GRB.MAXIMIZE)
             m.optimize()
             ubounds.append(m.getVarByName(neuron_name).X)
-            m.reset(0)
             m.setObjective(m.getVarByName(neuron_name), GRB.MINIMIZE)
             m.optimize()
             lbounds.append(m.getVarByName(neuron_name).X)
@@ -424,6 +424,8 @@ def analyze(nn, LB_N0, UB_N0, label):
         lbounds, ubounds = el_bounds_to_list(bounds, bounds_size)
     # else perform actual robustness analysis
     else:
+        # TODO implement a strategy on how many layers to apply linear
+        # programming to
         # use linear programming on two first layers (1 sec timeout)
         lbounds, ubounds = linear_solver_layerwise(nn, man, LB_N0, UB_N0,
                                                    0, 2, 1)
