@@ -292,6 +292,101 @@ def get_relu_bounds(weights, biases, lbounds, ubounds):
     return relu_lbounds, relu_ubounds
 
 
+def model_add_relu_constraints(model, layer_type, neuron_var, affine_sum, lb,
+                               ub, rlb, rub):
+    """Adds ReLU constraints on a neuron variable.
+
+    Args:
+        - model: the Gurobi model to which to add the constraints
+        - layer_type: the type of the layer on which the neuron ReLU
+          constraints should be added
+        - neuron_var: the Gurobi variables representing the result of the ReLU
+        - affine_sum: the Gurobi linear expression representing the affine sum
+          given as input to the ReLU
+        - lb: the ELINA lower bound on the ReLU output
+        - ub: the ELINA upper bound on the ReLU output
+        - rlb: the minimum value the affine sum can take
+        - rub: the maximum value the affine sum can take
+    """
+    if layer_type == "Affine" or (layer_type == "ReLU" and lb > 0):
+        model.addConstr(neuron_var, GRB.EQUAL, affine_sum)
+    elif layer_type == "ReLU":
+        # ReLU(z) >= z
+        model.addConstr(neuron_var, GRB.GREATER_EQUAL, affine_sum)
+        # ReLU(z) <= (ub_z / ub_z - lb_z) * z +\
+        #            (ub_z * lb_z / lb_z - ub_z)
+        rhs = LinExpr()
+        rhs += (rub / (rub - rlb)) * (affine_sum)
+        rhs += ((rub * rlb) / (rlb - rub))
+        model.addConstr(neuron_var, GRB.LESS_EQUAL, rhs)
+    else:
+        print("layer type not supported")
+
+
+def model_add_layer_constraints(man, model, nn, layer, lbounds, ubounds):
+    """Add constraints for a layer to the Gurobi model. Note that this relies
+    on the fact that the Gurobi variables in the previous layer already exist.
+
+    Args:
+        - man: the ELINA manager used to manage abstract domains
+        - model: the Gurobi model to add the constraints to
+        - nn: the neural network on which to apply the constraints
+        - layer: the layer number of the neural network on which to add the
+          constraints
+        - lbounds: the ELINA lower bounds to the layer before the layer on
+          which the constraints will be added.
+        - ubounds: the ELINA upper bounds to the layer before the layer on
+          which the constraints will be added.
+
+    Returns:
+        The ELINA lower and upper bounds to the layer on which we added the
+        constraints.
+    """
+    weights = nn.weights[layer] # weights for each neuron in this layer
+    biases = nn.biases[layer]   # biases of each neuron in this layer
+
+    # compute interval bounds on layer
+    prev_lbounds, prev_ubounds = lbounds, ubounds
+    bound_size, bounds = interval_propagation(nn, man, lbounds, ubounds, layer,
+                                              layer+1)
+    lbounds, ubounds = el_bounds_to_list(bounds, bound_size)
+    relu_lbnds, relu_ubnds = get_relu_bounds(weights, biases, prev_lbounds,
+                                             prev_ubounds)
+
+    # loop over neuron in next layer to set contraints
+    for neuron, neuron_weights in enumerate(weights):
+        lb = lbounds[neuron]
+        ub = ubounds[neuron]
+
+        # if neuron zero anyways, skip it
+        if not ub > 0:
+            continue
+
+        # create the neuron value
+        neuron_name = f"x{layer}_{neuron}"
+        neuron_var = model.addVar(lb=lb, ub=ub, name=neuron_name)
+
+        affine_sum = LinExpr(biases[neuron])
+        # build affine sum
+        for prev_neuron, synapse in enumerate(neuron_weights):
+            # only add the neuron if it contributes
+            if prev_ubounds[prev_neuron] > 0 and synapse != 0:
+                prev_neuron_name = f"x{layer-1}_{prev_neuron}"
+                affine_sum += synapse * model.getVarByName(prev_neuron_name)
+
+        rub = relu_ubnds[neuron]
+        rlb = relu_lbnds[neuron]
+        layer_type = nn.layertypes[layer]
+        model_add_relu_constraints(model, layer_type, neuron_var, affine_sum,
+                                   lb, ub, rlb, rub)
+
+    # make neuron vars available for constraint building in next layer
+    model.update()
+
+    # return ELINA bounds from the current layer
+    return lbounds, ubounds
+
+
 def linear_solver_layerwise(nn, man, lbounds, ubounds, layer_start, layer_stop,
                             timeout):
     """Builds a linear model of the contraints for a specified number of layers
@@ -340,56 +435,8 @@ def linear_solver_layerwise(nn, man, lbounds, ubounds, layer_start, layer_stop,
 
     # for each layer, add the constraints
     for layer in range(layer_start, layer_stop):
-        weights = nn.weights[layer] # weights for each neuron in this layer
-        biases = nn.biases[layer]   # biases of each neuron in this layer
-
-        # compute interval bounds on layer
-        prev_lbounds, prev_ubounds = lbounds, ubounds
-        bound_size, bounds = interval_propagation(nn, man, lbounds, ubounds,
-                                                  layer, layer+1)
-        lbounds, ubounds = el_bounds_to_list(bounds, bound_size)
-        relu_lbnds, relu_ubnds = get_relu_bounds(weights, biases, prev_lbounds,
-                                                 prev_ubounds)
-
-        # loop over neuron in next layer to set contraints
-        for neuron, neuron_weights in enumerate(weights):
-            lb = lbounds[neuron]
-            ub = ubounds[neuron]
-
-            # if neuron zero anyways, skip it
-            if not ub > 0:
-                continue
-
-            # create the neuron value
-            neuron_name = f"x{layer}_{neuron}"
-            neuron_var = m.addVar(lb=lb, ub=ub, name=neuron_name)
-
-            affine_sum = LinExpr(biases[neuron])
-            # build affine sum
-            for prev_neuron, synapse in enumerate(neuron_weights):
-                # only add the neuron if it contributes
-                if prev_ubounds[prev_neuron] > 0 and synapse != 0:
-                    prev_neuron_name = f"x{layer-1}_{prev_neuron}"
-                    affine_sum += synapse * m.getVarByName(prev_neuron_name)
-
-            if nn.layertypes[layer] == "Affine" or lb > 0:
-                m.addConstr(neuron_var, GRB.EQUAL, affine_sum)
-            elif nn.layertypes[layer] == "ReLU":
-                # ReLU(z) >= z
-                m.addConstr(neuron_var, GRB.GREATER_EQUAL, affine_sum)
-                # ReLU(z) <= (ub_z / ub_z - lb_z) * z +\
-                #            (ub_z * lb_z / lb_z - ub_z)
-                rub = relu_ubnds[neuron]
-                rlb = relu_lbnds[neuron]
-                rhs = LinExpr()
-                rhs += (rub / (rub - rlb)) * (affine_sum)
-                rhs += ((rub * rlb) / (rlb - rub))
-                m.addConstr(neuron_var, GRB.LESS_EQUAL, rhs)
-            else:
-                print("layer type not supported")
-
-        # make neuron vars available for constraint building in next layer
-        m.update()
+        lbounds, ubounds = model_add_layer_constraints(man, m, nn, layer,
+                                                       lbounds, ubounds)
 
     # all layers built, compute value of layer_stop - 1
     curr_lbounds, curr_ubounds = lbounds, ubounds
@@ -468,28 +515,6 @@ def analyze(nn, LB_N0, UB_N0, label):
 
 if __name__ == '__main__':
     from sys import argv
-
-    # TODO remove =================================================
-
-    # if len(argv) > 1 and argv[1] == "test":
-    #     nn = layers()
-    #     nn.biases = [[0.1, -0.5, 1.2],
-    #                  [0, -0.2],
-    #                  [0.5]]
-    #     nn.weights = [[[0.2, 0.5, -1], [1.5, -0.2, 0.2], [0.7, 0.1, 0]],
-    #                   [[-2, -1.5, 0.1], [0, -0.2, 3]],
-    #                   [[-0.2, 0.4]]]
-    #     nn.layertypes = ["ReLU", "ReLU", "ReLU"]
-    #     nn.numlayer = 3
-
-    #     lbounds = [-0.0, 0.5, 0.2]
-    #     ubounds = [0.5, 0.7, 0.3]
-
-    #     analyze(nn, lbounds, ubounds, 0)
-
-        # TODO
-    # =============================================================
-
 
     if len(argv) < 3 or len(argv) > 4:
         print('usage: python3.6 ' + argv[0] + ' net.txt spec.txt [timeout]')
