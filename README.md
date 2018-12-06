@@ -4,7 +4,21 @@ This project uses `git lfs`. Please refer to [their website](https://git-lfs.git
 
 ## Running the Project
 
-The project is hosted on a docker image.
+### Virtual Machine
+
+To run the project in the virtual machine, simply clone the `git` repo somewhere into the VM. Then run `setup_vm.sh` from within the cloned repo. This should provide you with the functionality provided below, but you will need to substitute `docker run` with `test.sh` and run the commands within `/home/riai2018/analyzer/`.
+
+Note that you might also require to run `source setup_gurobi.sh` in order to setup environment variables to make gurobi work properly. If you encounter an error indicating the following:
+
+```sh
+ImportError: libgurobi81.so: cannot open shared object file: No such file or directory.
+```
+
+It indicates that you need to source `setup_gurobi.sh`.
+
+### Docker
+
+The project is hosted on a docker image. This can be used if the gurobi solver is not required or you have a valid license to inject into the docker container.
 
 In order to build the docker image please run:
 
