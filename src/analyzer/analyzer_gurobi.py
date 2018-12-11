@@ -107,6 +107,8 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
     zj_lbounds=[]
     zj_ubounds=[]
 
+    nn.ffn_counter=0
+
     for layerno in range(numlayer-1):
 
         weights_zj = nn.weights[nn.ffn_counter]
@@ -153,6 +155,9 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
 
         zj_lbounds = yk_lbounds
         zj_ubounds = yk_ubounds
+        print(zj_lbounds)
+        print(zj_ubounds)
+        nn.ffn_counter+=1
 
     print("Final bounds")
     print(yk_lbounds)
@@ -162,30 +167,15 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
 
     verified_flag = True
     predicted_label = 0
-    if(LB_N0[0]==UB_N0[0]):
-        for i in range(output_size):
-            inf = bounds[i].contents.inf.contents.val.dbl
-            flag = True
-            for j in range(output_size):
-                if(j!=i):
-                   sup = bounds[j].contents.sup.contents.val.dbl
-                   if(inf<=sup):
-                      flag = False
-                      break
-            if(flag):
-                predicted_label = i
-                break
-    else:
-        inf = yk_lbounds
-        for j in range(output_size):
-            if(j!=label):
-                sup = yk_ubounds
-                if(inf<=sup):
-                    predicted_label = label
-                    verified_flag = False
-                    break
 
-    elina_interval_array_free(bounds,output_size)
-    elina_abstract0_free(man,element)
-    elina_manager_free(man)
+    inf = yk_lbounds[label]
+    for j in range(len(yk_ubounds)):
+        if(j!=label):
+            sup = yk_ubounds[j]
+            if(inf<=sup):
+                predicted_label = label
+                verified_flag = False
+                break
+
+    print("Verified -> ",verified_flag)
     return predicted_label, verified_flag
