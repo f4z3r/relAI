@@ -100,7 +100,6 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
     num_pixels = len(xi_lbounds)
     nn.ffn_counter = 0
     numlayer = nn.numlayer
-    man = elina_box_manager_alloc()
 
     print("Number of image pixels -> ",num_pixels)
     print(numlayer)
@@ -108,6 +107,8 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
     zj_ubounds=[]
 
     nn.ffn_counter=0
+    for i in range(xi_lbounds.shape[0]):
+        assert xi_lbounds[i] < xi_ubounds[i], "Image lower bounds must be the same number as the upper bounds"
 
     for layerno in range(numlayer-1):
 
@@ -122,14 +123,17 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
 
 
         print("Layer number -> ",layerno)
+        print("Number of lower bounds of the units of current layer -> ",xi_lbounds.shape[0])
+        print("Number of upper bounds of the units of current layer -> ",xi_ubounds.shape[0])
         print("Current layer neurons -> ", len(weights_zj[0]))
         print("Next layer number of neurons -> ", len(weights_zj))
         print("Next layer number of biases -> ", len(biases_zj))
         print("Total number of layers -> ", range(numlayer))
-        print("num weights_zj ", len(weights_zj))
-        print("num weights_yk ", num_out_pixels)
-        print("num out pixels of layer ", nn.ffn_counter+1)
+        print("number of weights_zj to zjs -> ", len(weights_zj))
+        print("number of weights_yk to yks -> ", num_out_pixels)
+        print("number of biases_yk to yks -> ", len(biases_zj))
         print("Total yk to calculate the bounds of -> ",num_out_pixels)
+        print("number of yks of layer -> ", nn.ffn_counter+1)
 
 
         np.ascontiguousarray(weights_zj, dtype=np.double)
@@ -152,6 +156,11 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
 
         xi_ubounds = zj_ubounds
         xi_lbounds = zj_lbounds
+
+        #ReLU bounds
+        xi_lbounds[xi_lbounds <0 ] = 0 
+        xi_ubounds[xi_ubounds <0 ] = 0
+    
 
         zj_lbounds = yk_lbounds
         zj_ubounds = yk_ubounds
