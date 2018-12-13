@@ -7,7 +7,8 @@ from neuron import Neuron
 class Layer:
     """Layer. Respresents a layer of neurons inside the neural network. This
     only supports fully connected layers."""
-    def __init__(self, model, id, weights_in, weights_out, biases, _type):
+    def __init__(self, model, id, weights_in, weights_out, biases, _type,
+                 lbounds=None, ubounds=None):
         """Constructor.
 
         Args:
@@ -17,12 +18,19 @@ class Layer:
             - weights_out: a lost of list of the weights going out of the layer
             - biases: the biases of the neurons contained in this layer
             - _type: the type of the layer
+            - lbounds: the lower bounds of the neurons on this layer
+            - ubounds: the upper bounds of the neurons on this layer
 
         Note:
+            Setting bounds is only allowed on input layers.
+
             In order to create an input layer, simply supply weights_in and
             biases as `None`. For the final output layer, simply supply
             weights_out as `None`.
         """
+        if ubounds is not None or ubounds is not None:
+            assert _type == "input", "manual bounds only alloed on input layer"
+
         self.model = model
         self.id = id
         self.name = "layer({0})".format(id)
@@ -39,6 +47,11 @@ class Layer:
             bias = biases[neuron_id] if biases is not None else None
             neuron = Neuron(model, neuron_id, self.id, w_in, w_out, bias,
                             self._type)
+            if lbounds is not None:
+                neuron.set_lower_bound(lbounds[neuron_id])
+            if ubounds is not None:
+                neuron.set_upper_bound(ubounds[neuron_id])
+
             self._neurons.append(neuron)
 
     @staticmethod

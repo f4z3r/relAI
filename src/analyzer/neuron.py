@@ -61,15 +61,62 @@ class Neuron:
         self._uses_lp = True
         # TODO: implement naive bound update
 
-    def _set_affine_bounds(self, a, b):
+    def set_bounds(self, ubound, lbound):
+        """Set the bounds for the neuron manually. This is only allowed on
+        input type neurons. All other types of neurons are restricted to having
+        bounds set using interval propagation or linear programming.
+
+        Args:
+            - lbound: the lower bound of the output of the neuron
+            - ubound: the upper bound of the output of the neuron
+        """
+        assert self._type == "input", "manual bound setting only allowd on" +\
+                                      "input neurons"
+        self._set_affine_lb(lbound)
+        self._set_affine_ub(ubound)
+
+    def set_lower_bound(self, lbound):
+        """set the lower bound for the neuron manually. this is only allowed on
+        input type neurons. all other types of neurons are restricted to having
+        bounds set using interval propagation or linear programming.
+
+        args:
+            - lbound: the lower bound of the output of the neuron
+        """
+        assert self._type == "input", "manual bound setting only allowd on" +\
+                                      "input neurons"
+        self._set_affine_lb(lbound)
+
+    def set_upper_bound(self, ubound):
+        """set the upper bound for the neuron manually. this is only allowed on
+        input type neurons. all other types of neurons are restricted to having
+        bounds set using interval propagation or linear programming.
+
+        args:
+            - lbound: the lower bound of the output of the neuron
+        """
+        assert self._type == "input", "manual bound setting only allowd on" +\
+                                      "input neurons"
+        self._set_affine_ub(ubound)
+
+    def _set_affine_lb(self, a):
         """Sets the affine bounds on this neuron. This automatically udpates
         the output bounds on the neuron as well.
 
         Args:
             - a: the lower bound
-            - b: the upper bound
         """
-        self._affine_bounds = [a, b]
+        self._affine_bounds[0] = a
+        self._update_output_bounds()
+
+    def _set_affine_ub(self, a):
+        """Sets the affine bounds on this neuron. This automatically udpates
+        the output bounds on the neuron as well.
+
+        Args:
+            - a: the upper bound
+        """
+        self._affine_bounds[1] = a
         self._update_output_bounds()
 
     def get_output_bounds(self):

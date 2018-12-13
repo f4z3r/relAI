@@ -183,13 +183,13 @@ def analyze(nn, LB_N0, UB_N0, label):
         # get bounds for each output neuron
         bounds = elina_abstract0_to_box(man,element)
     else:
-        net = Net.from_layers("gurobi_net", nn)
+        net = Net.from_layers("gurobi_net", nn, LB_N0, LB_U0)
         print(str(net))
         for layer in net:
             print(str(layer))
             for neuron in layer:
                 print(str(neuron))
-        return 0, True
+        return 0, False
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True

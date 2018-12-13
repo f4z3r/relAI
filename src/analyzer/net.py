@@ -21,13 +21,16 @@ class Net:
         self.model = Model(name)
 
     @staticmethod
-    def from_layers(name, layers):
+    def from_layers(name, layers, lbounds, ubounds):
         """Constructs a network from a layer definition. See the main
         analyzer.py file to see what a layer definition consists of.
 
         Args:
             - name: the name of the model
             - layers: the layer definition used to construct the model
+            - lbounds: the lower bounds of the input layer
+            - ubounds: the upper bounds of the input layer
+
         Returns:
             A network.
         """
@@ -40,7 +43,7 @@ class Net:
         weights_out = layers.weights[0]
         biases = None
         layer = Layer(net.model, id, weights_in, weights_out, biases,
-                      layer_type)
+                      layer_type, lbounds, ubounds)
         net._layers.append(layer)
 
         # add the hidden and output layers
