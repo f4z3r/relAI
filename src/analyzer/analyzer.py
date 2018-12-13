@@ -156,23 +156,7 @@ def analyze(nn, LB_N0, UB_N0, label):
 
             for i in range(num_out_pixels):
                 dimadd.contents.dim[i] = num_in_pixels
-
-            #ADDED now to be canceled
-            """
-
-            weights_zj = weights
-            weights_yk = nn.weights[nn.ffn_counter+1]
-            biases_zj = biases
-            biases_yk = nn.biases[nn.ffn_counter+1]
-            num_out_pixels = len(weights_yk)
-            print("Layers ", nn.layertypes)
-            print("num weights_zj ", len(weights_zj))
-            print("num weights_yk ", len(weights_yk))
-            print("nn ", nn)
-            print("num out pixels of layer ", nn.ffn_counter+1)"""
             
-
-
 
             elina_abstract0_add_dimensions(man, True, element, dimadd, False)
             elina_dimchange_free(dimadd)
@@ -272,8 +256,8 @@ if __name__ == '__main__':
     if(label==int(x0_low[0])):
         print("Starting analysis")
         LB_N0, UB_N0 = get_perturbed_image(x0_low,epsilon)  # get perturbed image
-        #_, verified_flag = my_analyzer.analyze(nn,LB_N0,UB_N0,label)    # get prediction on perturbed image
-        _, verified_flag = my_analyzer.analyze_gurobi(nn,LB_N0,UB_N0,label)    # get prediction on perturbed image
+        _, verified_flag = my_analyzer.analyze_gurobi_precisely(nn,LB_N0,UB_N0,label)    # get prediction on perturbed image
+        #_, verified_flag = my_analyzer.analyze_gurobi_3layers_window_wise(nn,LB_N0,UB_N0,label)    # get prediction on perturbed image
         if(verified_flag):
             print("verified")
             return_code = 0

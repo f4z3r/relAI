@@ -95,7 +95,81 @@ def inject_zj_bounds(man, element, idx_zjs, lower_bounds, upper_bounds):
 
     return element, man
 
-def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
+def analyze_gurobi_precisely(nn, xi_lbounds, xi_ubounds, label):
+
+    num_pixels = len(xi_lbounds)
+    nn.ffn_counter = 0
+    numlayer = nn.numlayer
+
+    print("Number of image pixels -> ",num_pixels)
+    print(numlayer)
+    zj_lbounds=[]
+    zj_ubounds=[]
+
+    nn.ffn_counter=0
+    for i in range(xi_lbounds.shape[0]):
+        assert xi_lbounds[i] < xi_ubounds[i], "Image lower bounds must be the same number as the upper bounds"
+
+    for layerno in range(numlayer-1):
+
+        weights_zj = nn.weights[nn.ffn_counter]
+        weights_yk = nn.weights[nn.ffn_counter+1]
+        biases_zj = nn.biases[nn.ffn_counter]
+        biases_yk = nn.biases[nn.ffn_counter+1]
+
+        num_out_pixels = len(weights_yk)
+
+
+        print("Layer number -> ",layerno)
+        print("Number of lower bounds of the units of current layer -> ",xi_lbounds.shape[0])
+        print("Number of upper bounds of the units of current layer -> ",xi_ubounds.shape[0])
+        print("Current layer neurons -> ", len(weights_zj[0]))
+        print("Next layer number of neurons -> ", len(weights_zj))
+        print("Next layer number of biases -> ", len(biases_zj))
+        print("Total number of layers -> ", range(numlayer))
+        print("number of weights_zj to zjs -> ", len(weights_zj))
+        print("number of weights_yk to yks -> ", num_out_pixels)
+        print("number of biases_yk to yks -> ", len(biases_zj))
+        print("Total yk to calculate the bounds of -> ",num_out_pixels)
+        print("number of yks of layer -> ", nn.ffn_counter+1)
+
+
+        np.ascontiguousarray(weights_zj, dtype=np.double)
+        np.ascontiguousarray(biases_zj, dtype=np.double)
+        np.ascontiguousarray(weights_yk, dtype=np.double)
+        np.ascontiguousarray(biases_yk, dtype=np.double)
+        
+        if layerno==0:    
+            model, yks_LP, zj_lbounds, zj_ubounds, yk_lbounds, yk_ubounds = solvers.get_bounds_linear_solver_layerwise(weights_xi_zj = weights_zj, weights_zj_yk = weights_yk, biases_zj = biases_zj, biases_yk = biases_yk, 
+                                                                                              xi_lbounds = xi_lbounds, xi_ubounds = xi_ubounds, zj_lbounds=zj_lbounds, zj_ubounds=zj_ubounds)
+        else:
+            #weights and biases are up to date thanks to the initial selection at each iteraton of the for loop
+            model, yks_LP, yk_lbounds, yk_ubounds =solvers.get_bounds_linear_solver_entire_net(model=model, yks_LP=yks_LP, yk_lbounds=yk_lbounds, yk_ubounds=yk_ubounds, weights_zj_yk = weights_yk, biases_yk = biases_yk, layerno = layerno)
+
+        nn.ffn_counter+=1
+
+    print("Final bounds")
+    print(yk_lbounds)
+    print(yk_ubounds)
+
+    # if epsilon is zero, try to classify else verify robustness
+
+    verified_flag = True
+    predicted_label = 0
+
+    inf = yk_lbounds[label]
+    for j in range(len(yk_ubounds)):
+        if(j!=label):
+            sup = yk_ubounds[j]
+            if(inf<=sup):
+                predicted_label = label
+                verified_flag = False
+                break
+
+    print("Verified -> ",verified_flag)
+    return predicted_label, verified_flag
+
+def analyze_gurobi_3layers_window_wise(nn, xi_lbounds, xi_ubounds, label):
     
     num_pixels = len(xi_lbounds)
     nn.ffn_counter = 0
@@ -139,7 +213,7 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
         np.ascontiguousarray(weights_yk, dtype=np.double)
         np.ascontiguousarray(biases_yk, dtype=np.double)
              
-        zj_lbounds, zj_ubounds, yk_lbounds, yk_ubounds = solvers.get_bounds_linear_solver_layerwise(weights_xi_zj = weights_zj, weights_zj_yk = weights_yk, biases_zj = biases_zj, biases_yk = biases_yk, 
+        _, _, zj_lbounds, zj_ubounds, yk_lbounds, yk_ubounds = solvers.get_bounds_linear_solver_layerwise(weights_xi_zj = weights_zj, weights_zj_yk = weights_yk, biases_zj = biases_zj, biases_yk = biases_yk, 
                                                                                               xi_lbounds = xi_lbounds, xi_ubounds = xi_ubounds, zj_lbounds=zj_lbounds, zj_ubounds=zj_ubounds)
 
         xi_ubounds = zj_ubounds
@@ -152,7 +226,7 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
 
         zj_lbounds = yk_lbounds
         zj_ubounds = yk_ubounds
-        
+
         nn.ffn_counter+=1
 
     print("Final bounds")

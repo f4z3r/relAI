@@ -254,7 +254,6 @@ def get_bounds_linear_solver_layerwise(weights_xi_zj, weights_zj_yk, biases_zj, 
 
     model, yks = linear_solver_layerwise(weights_xi_zj = weights_xi_zj, weights_zj_yk=weights_zj_yk, biases_zj=biases_zj, biases_yk=biases_yk, 
                                        xi_lbounds=xi_lbounds, xi_ubounds=xi_ubounds, zj_lbounds=zj_lbounds, zj_ubounds=zj_ubounds)
-    #model, y = linear_solver_layerwise(weights_xi_zj = weights_xi_zj, weights_zj_y=weights_zj_yk[k], biases_zj=biases_zj, bias_yk=biases_yk[k], xi_lbounds=xi_lbounds, xi_ubounds=xi_ubounds, zj_lbounds=zj_lbounds, zj_ubounds=zj_ubounds)
 
     for k in range(numberof_yk):
     
@@ -268,10 +267,6 @@ def get_bounds_linear_solver_layerwise(weights_xi_zj, weights_zj_yk, biases_zj, 
         neuron_ub = yks[k].getValue()
      
         model.reset(0)
-
-        #TODO test if these two lines above can be used to avoid the model reconstruction below (just try commenting the line below and see if you get the same results)
-        #model, y = linear_solver_layerwise(weights_xi_zj, weights_zj_yk[k], biases_zj, biases_yk[k], xi_lbounds, xi_ubounds, zj_lbounds, zj_ubounds)
-        #model.setParam("OutputFlag", False)
 
         #Find lower bound of the neuron z
         model.setObjective(yks[k], GRB.MINIMIZE)
@@ -287,4 +282,112 @@ def get_bounds_linear_solver_layerwise(weights_xi_zj, weights_zj_yk, biases_zj, 
     print(neurons_lbs)
     print(neurons_ubs)
 
-    return zj_lbounds, zj_ubounds, neurons_lbs,neurons_ubs
+    return model, yks, zj_lbounds, zj_ubounds, neurons_lbs, neurons_ubs
+
+
+def addNextLayer(m, yks_LP, yk_lbounds, yk_ubounds, weights_zj_yk, biases_yk, layerno):
+
+    print("Adding next layer")
+    #The zj are the fresh yks computed the iteration before
+    numberof_zj = weights_zj_yk.shape[1]
+    #The yk are the new yks to be computed during the current iteration
+    numberof_yk = weights_zj_yk.shape[0]
+
+    print("numberof_zj -> ", numberof_zj)
+    print("numberof_yk -> ", numberof_yk)
+
+    for j in range(numberof_zj):
+
+        zj = "z"+str(j)+"l"+str(layerno)
+
+        if yk_ubounds[j] > 0: 
+            
+            #zj will be the neuron values after applying ReLU(zj)
+
+        
+            if yk_lbounds[j]>=0:
+
+                m.addVar(lb=yk_lbounds[j], ub=yk_ubounds[j],vtype=GRB.CONTINUOUS,name=zj)
+                m.update()
+                m.addConstr(m.getVarByName(zj),GRB.EQUAL,yks_LP[j],"c1_"+str(j)+"l"+str(layerno))
+
+            else:
+
+                m.addVar(lb=0, ub=yk_ubounds[j],vtype=GRB.CONTINUOUS,name=zj)
+                m.update()
+        
+                #ReLU(z) >= z
+                m.addConstr(m.getVarByName(zj),GRB.GREATER_EQUAL,yks_LP[j],"c1_"+str(j)+"l"+str(layerno))
+        
+                #ReLU(z) <= (ub_z / ub_z - lb_z) * z - (ub_z * lb_z / ub_z - lb_z)
+                zj_ReLU_ub = LinExpr()
+                zj_ReLU_ub+= (yk_ubounds[j]/(yk_ubounds[j]-yk_lbounds[j]))*yks_LP[j] - ((yk_ubounds[j]*yk_lbounds[j])/(yk_ubounds[j]-yk_lbounds[j]))
+                m.addConstr(m.getVarByName(zj),GRB.LESS_EQUAL,zj_ReLU_ub,"c2_"+str(j)+"l"+str(layerno))
+        else:
+            m.addVar(lb=0, ub=0,vtype=GRB.CONTINUOUS,name=zj)
+
+
+    m.update()
+    #It will contain all the linear expression for the next yk neurons
+    yks = []
+
+    for k in range(numberof_yk):
+
+        yk = LinExpr()
+
+        for j in range(numberof_zj):
+
+            zj = "z"+str(j)+"l"+str(layerno)
+            yk+=weights_zj_yk[k][j]*m.getVarByName(zj)
+
+        yk+= biases_yk[k]
+        yks.append(yk)
+
+
+    return m, yks
+
+
+
+
+def get_bounds_linear_solver_entire_net(model, yks_LP, yk_lbounds, yk_ubounds, weights_zj_yk, biases_yk, layerno):
+
+
+    print("Starting the precise analysis")
+
+
+    #The yk are the new yks to be computed during the current iteration
+    numberof_yk = weights_zj_yk.shape[0]
+    #new yks new bounds
+    neurons_lbs = np.zeros(numberof_yk)
+    neurons_ubs = np.zeros(numberof_yk)
+
+
+    model, yks = addNextLayer(m=model, yks_LP=yks_LP, yk_lbounds=yk_lbounds, yk_ubounds=yk_ubounds, weights_zj_yk=weights_zj_yk, biases_yk=biases_yk, layerno = layerno) #GIVE A NAME TO THE Y IN DIFFERENT LAYER WITH THE LAYER NUMBER OTHERWISE THEY OVERWRITE EACH OTHER
+
+    for k in range(numberof_yk):
+
+        #Find upper bound of the neuron y
+        model.setObjective(yks[k], GRB.MAXIMIZE)
+        model.setParam("OutputFlag", False)
+
+        model.optimize()
+ 
+        neuron_ub = yks[k].getValue()
+     
+        model.reset(0)
+
+        #Find lower bound of the neuron z
+        model.setObjective(yks[k], GRB.MINIMIZE)
+        model.optimize()
+
+        neuron_lb = yks[k].getValue()
+    
+        print("y new bounds -> [",neuron_lb,",",neuron_ub,"]")
+
+        neurons_lbs[k] = neuron_lb
+        neurons_ubs[k] = neuron_ub
+
+    print(neurons_lbs)
+    print(neurons_ubs)
+
+    return model, yks, neurons_lbs, neurons_ubs
