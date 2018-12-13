@@ -62,6 +62,41 @@ class Net:
 
         return net
 
+    def interval_propagation(self):
+        """Perform interval propagation on the entire network.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()):
+            layer.update_bounds_naive(self._layers[prev_num])
+
+        lbounds = []
+        ubounds = []
+        for neuron in self._layers[-1]:
+            bounds = neuron.get_output_bounds()
+            lbounds.append(bounds[0])
+            ubounds.append(bounds[1])
+        return lbounds, ubounds
+
+    def hidden_layers(self):
+        """Returns the list of hidden layers contained in the network. This
+        function simply returns all its layers but the first.
+
+        Returns:
+            A list of layers.
+        """
+        return self._layers[1:]
+
+    def print_debug_info(self):
+        """Prints debug information about the state of the network."""
+        print(str(self))
+        for layer in self:
+            print(str(layer))
+            for neuron in layer:
+                print(str(neuron))
+
     def __str__(self):
         return "Net: " + self.name +\
                "\n  layer count = " + str(len(self._layers))

@@ -130,6 +130,16 @@ def generate_linexpr0(weights, bias, size):
     return linexpr0
 
 
+def elina_bounds_to_lists(bounds, bounds_size):
+    lbounds = []
+    ubounds = []
+    for i in range(bounds_size):
+        lbounds.append(bounds[i].contents.inf.contents.val.dbl)
+        ubounds.append(bounds[i].contents.sup.contents.val.dbl)
+    elina_interval_array_free(bounds, bounds_size)
+    return lbounds, ubounds
+
+
 def analyze(nn, LB_N0, UB_N0, label):
     if LB_N0[0] == UB_N0[0]:
         num_pixels = len(LB_N0)
@@ -182,13 +192,14 @@ def analyze(nn, LB_N0, UB_N0, label):
         output_size = dims.intdim + dims.realdim
         # get bounds for each output neuron
         bounds = elina_abstract0_to_box(man,element)
+        lbounds, ubounds = elina_bounds_to_lists(bounds, output_size)
+        elina_abstract0_free(man,element)
+        elina_manager_free(man)
     else:
-        net = Net.from_layers("gurobi_net", nn, LB_N0, LB_U0)
-        print(str(net))
-        for layer in net:
-            print(str(layer))
-            for neuron in layer:
-                print(str(neuron))
+        net = Net.from_layers("gurobi_net", nn, LB_N0, UB_N0)
+        lbounds, ubounds = net.interval_propagation()
+        print("++NET++")
+        print(lbounds, ubounds)
         return 0, False
 
     # if epsilon is zero, try to classify else verify robustness
@@ -217,7 +228,6 @@ def analyze(nn, LB_N0, UB_N0, label):
                     verified_flag = False
                     break
 
-    elina_manager_free(man)
     return predicted_label, verified_flag
 
 

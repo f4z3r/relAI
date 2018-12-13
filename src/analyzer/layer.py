@@ -77,8 +77,8 @@ class Layer:
         Args:
             - layer: the previous layer to this one in the network
         """
-        # TODO: implement the naive bound update
-        pass
+        for neuron in self:
+            neuron.update_bounds_naive(layer)
 
     def update_bounds_lp(self, layer):
         """Update the bounds of each neuron in the layer using linear
@@ -87,8 +87,8 @@ class Layer:
         Args:
             - layer: the previous layer to this one in the network
         """
-        # TODO: implement the linear programming update
-        pass
+        for neuron in self:
+            neuron.update_bounds_lb(layer)
 
     def __str__(self):
         return "Layer: " + self.name +\

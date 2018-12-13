@@ -47,9 +47,21 @@ class Neuron:
         Args:
             - layer: the layer of neurons previous to this neuron's layer
         """
-        assert self.layer_id + 1 == layer.id, "should be the previous layer"
+        assert self.layer_id == layer.id + 1, "should be the previous layer"
         self._uses_lp = False
-        # TODO: implement naive bound update
+        min_val = self.bias
+        max_val = self.bias
+        for neuron_id, neuron in enumerate(layer):
+            synapse = self.weights_in[neuron_id]
+            bounds = neuron.get_output_bounds()
+            if synapse >= 0:
+                min_val += synapse * bounds[0]
+                max_val += synapse * bounds[1]
+            else:
+                min_val += synapse * bounds[1]
+                max_val += synapse * bounds[0]
+        self._set_affine_lb(min_val)
+        self._set_affine_ub(max_val)
 
     def update_bounds_lp(self, layer):
         """Updates the neuron's bounds using linear programming.
@@ -57,7 +69,7 @@ class Neuron:
         Args:
             - layer: the layer of neurons previous to this neuron's layer
         """
-        assert self.layer_id + 1 == layer.id, "should be the previous layer"
+        assert self.layer_id == layer.id + 1, "should be the previous layer"
         self._uses_lp = True
         # TODO: implement naive bound update
 
