@@ -24,7 +24,7 @@ from analyzer import *
 
 """Module containing helper functions use to solve linear optimisations."""
 
-def linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
+def linear_solver_neuronwise(weights_xi_zj, biases_zj, xi_lbounds, xi_ubounds):
 
     #TODO: to be tested
 
@@ -34,31 +34,38 @@ def linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
     Return: gurobi LP model, objective expression
     """
 
+    numberof_zj = weights_xi_zj.shape[0]
+    numberof_xi = xi_lbounds.shape[0]
+
     #Create gurobipy linear solver
     m = Model("neuronwise_linear_solver")
     m.setParam("OutputFlag", False)
-    n_bounds = xi_lbounds.shape[0]
 
-    #Create variables and constraints of linear solver
-    for i in range(n_bounds):
-        x_i="x"+str(i)
-        #xi >= lower bound && xi <= upper bound
-        m.addVar(lb=xi_lbounds[i], ub=xi_ubounds[i], vtype=GRB.CONTINUOUS, name=x_i )
+    zjs = []
+
+    for j in range(numberof_zj):
+
+
+        #Create variables and constraints of linear solver
+        for i in range(numberof_xi):
+            xi="x"+str(i)
+            #xi >= lower bound && xi <= upper bound
+            m.addVar(lb=xi_lbounds[i], ub=xi_ubounds[i], vtype=GRB.CONTINUOUS, name=xi )
     
-    m.update()
-    #z next layer neuron output
-    z = LinExpr()
+        m.update()
+        #z next layer neuron output
+        zj = LinExpr()
 
-    #z = sum(wi*xi)
-    for i in range(n_bounds):
+        #z = sum(wi*xi)
+        for i in range(numberof_xi):
+            zj += weights_xi_zj[j][i] * m.getVarByName("x"+str(i))
 
-        z += weights[i] * m.getVarByName("x"+str(i))
+        zj += biases_zj[j]
+        zjs.append(zj)
 
-    z += bias
+    return m, zjs
 
-    return m, z
-
-def get_bounds_linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
+def get_bounds_linear_solver_neuronwise(weights_xi_zj, biases_zj, xi_lbounds, xi_ubounds):
 
     #TODO: to be tested
 
@@ -76,30 +83,35 @@ def get_bounds_linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds):
     - neuron_ub: scalar  | representing the scalar upper bound of the next layer neuron z
     """
 
-    model, z = linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds)
-
-    #Find upper bound of the neuron z
-    model.setObjective(z, GRB.MAXIMIZE)
-    model.setParam("OutputFlag", False)
-    model.optimize()
-  
-    neuron_ub = z.getValue()
-    #value = model.getObjective().getValue()
-
-    model.reset(0)
-    model.update()
-    #TODO test if these two lines above can be used to avoid the model reconstruction below (just try commenting the line below and see if you get the same results)
-    model, z = linear_solver_neuronwise(weights, bias, xi_lbounds, xi_ubounds)
-
-    #Find lower bound of the neuron z
-    model.setObjective(z, GRB.MINIMIZE)
-    model.setParam("OutputFlag", False)
-    model.optimize()
-
-    neuron_lb = z.getValue() 
+    numberof_zj = weights_xi_zj.shape[0]
     
-    print("z new bounds -> [",neuron_lb,",",neuron_ub,"]")
-    return neuron_lb,neuron_ub
+    neurons_lbs = np.zeros(numberof_zj)
+    neurons_ubs = np.zeros(numberof_zj)
+
+    model, zjs = linear_solver_neuronwise(weights_xi_zj, biases_zj, xi_lbounds, xi_ubounds)
+
+    for j in range(numberof_zj):
+
+        #Find upper bound of the neuron z
+        model.setObjective(zjs[j], GRB.MAXIMIZE)
+        model.optimize()
+  
+        neuron_ub = zjs[j].getValue()
+
+        model.reset(0)
+    
+        #Find lower bound of the neuron z
+        model.setObjective(zjs[j], GRB.MINIMIZE)
+        model.optimize()
+
+        neuron_lb = zjs[j].getValue() 
+    
+        print("z new bounds -> [",neuron_lb,",",neuron_ub,"]")
+
+        neurons_lbs[j] = neuron_lb
+        neurons_ubs[j] = neuron_ub
+
+    return neurons_lbs,neurons_ubs
 
 def linear_solver_layerwise(weights_xi_zj, weights_zj_yk, biases_zj, biases_yk, xi_lbounds, xi_ubounds, zj_lbounds, zj_ubounds):
 
@@ -237,14 +249,7 @@ def get_bounds_linear_solver_layerwise(weights_xi_zj, weights_zj_yk, biases_zj, 
 
     if len(zj_lbounds) == 0:
         #First compute the interval upper and lower bounds of all the zjs of the next layer Z right before the ReLU
-        zj_lbounds = np.zeros(numberof_zj)
-        zj_ubounds = np.zeros(numberof_zj)
-
-        for j in range(numberof_zj):
- 
-            zj_lb, zj_ub = get_bounds_linear_solver_neuronwise(weights = weights_xi_zj[j], bias = biases_zj[j], xi_lbounds = xi_lbounds, xi_ubounds = xi_ubounds)
-            zj_lbounds[j] = zj_lb
-            zj_ubounds[j] = zj_ub
+        zj_lbounds, zj_ubounds = get_bounds_linear_solver_neuronwise(weights_xi_zj = weights_xi_zj, biases_zj = biases_zj, xi_lbounds = xi_lbounds, xi_ubounds = xi_ubounds)
 
 
     model, yks = linear_solver_layerwise(weights_xi_zj = weights_xi_zj, weights_zj_yk=weights_zj_yk, biases_zj=biases_zj, biases_yk=biases_yk, 

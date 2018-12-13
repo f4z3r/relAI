@@ -120,8 +120,6 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
         num_out_pixels = len(weights_yk)
 
 
-
-
         print("Layer number -> ",layerno)
         print("Number of lower bounds of the units of current layer -> ",xi_lbounds.shape[0])
         print("Number of upper bounds of the units of current layer -> ",xi_ubounds.shape[0])
@@ -140,19 +138,9 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
         np.ascontiguousarray(biases_zj, dtype=np.double)
         np.ascontiguousarray(weights_yk, dtype=np.double)
         np.ascontiguousarray(biases_yk, dtype=np.double)
-        #TODO: to test and complete, first the neuronwise LP solver, then try the layerwise one
-
-
-        #yk_lbounds=np.zeros(num_out_pixels)
-        #yk_ubounds=np.zeros(num_out_pixels)
-
-        #for k in range(num_out_pixels):
              
         zj_lbounds, zj_ubounds, yk_lbounds, yk_ubounds = solvers.get_bounds_linear_solver_layerwise(weights_xi_zj = weights_zj, weights_zj_yk = weights_yk, biases_zj = biases_zj, biases_yk = biases_yk, 
                                                                                               xi_lbounds = xi_lbounds, xi_ubounds = xi_ubounds, zj_lbounds=zj_lbounds, zj_ubounds=zj_ubounds)
-        #yk_lbounds[k] = yk_lb
-        #yk_ubounds[k] = yk_ub
-        #print("Done with unit yk -> ",k)
 
         xi_ubounds = zj_ubounds
         xi_lbounds = zj_lbounds
@@ -164,8 +152,7 @@ def analyze_gurobi(nn, xi_lbounds, xi_ubounds, label):
 
         zj_lbounds = yk_lbounds
         zj_ubounds = yk_ubounds
-        print(zj_lbounds)
-        print(zj_ubounds)
+        
         nn.ffn_counter+=1
 
     print("Final bounds")
