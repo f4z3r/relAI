@@ -19,6 +19,9 @@ class Net:
         self._layers = []
         self.name = name
         self.model = Model(name)
+        self.model.setParam("OutputFlag", False)
+        self.model.setParam("Presolve", 2)
+        self.model.setParam("Timelimit", 100)
 
     @staticmethod
     def from_layers(name, layers, lbounds, ubounds):
@@ -72,13 +75,20 @@ class Net:
         for prev_num, layer in enumerate(self.hidden_layers()):
             layer.update_bounds_naive(self._layers[prev_num])
 
-        lbounds = []
-        ubounds = []
-        for neuron in self._layers[-1]:
-            bounds = neuron.get_output_bounds()
-            lbounds.append(bounds[0])
-            ubounds.append(bounds[1])
-        return lbounds, ubounds
+        return self._layers[-1].get_output_bounds()
+
+    def linear_programming(self):
+        """Perform linear programminig on the entire network.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()):
+            self.model.update()
+            layer.update_bounds_lp(self._layers[prev_num])
+
+        return self._layers[-1].get_output_bounds()
 
     def hidden_layers(self):
         """Returns the list of hidden layers contained in the network. This

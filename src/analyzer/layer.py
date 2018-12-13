@@ -88,7 +88,22 @@ class Layer:
             - layer: the previous layer to this one in the network
         """
         for neuron in self:
-            neuron.update_bounds_lb(layer)
+            neuron.update_bounds_lp(layer)
+
+    def get_output_bounds(self):
+        """Returns the output bounds of this layer.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        lbounds = []
+        ubounds = []
+        for neuron in self:
+            bounds = neuron.get_output_bounds()
+            lbounds.append(bounds[0])
+            ubounds.append(bounds[1])
+        return lbounds, ubounds
 
     def __str__(self):
         return "Layer: " + self.name +\

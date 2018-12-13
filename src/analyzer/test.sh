@@ -27,6 +27,8 @@ if [[ $# -eq 2 ]]; then
         # Check return code and increase if passed
         if [[ $? -eq 0 ]]; then
             ((++passed))
+        else
+            echo "Failed verifying image ${img_num}"
         fi
     done
 

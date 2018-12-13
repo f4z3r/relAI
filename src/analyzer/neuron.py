@@ -34,7 +34,7 @@ class Neuron:
         self.weights_in = weights_in
         self.weights_out = weights_out
         self.bias = bias
-        self._affine_le = LinExpr()
+        self._affine_le = None
         self._output_var = model.addVar(name=self.name)
         self._affine_bounds = [-GRB.INFINITY, GRB.INFINITY]
         self._output_bounds = [0, GRB.INFINITY]
@@ -60,8 +60,7 @@ class Neuron:
             else:
                 min_val += synapse * bounds[1]
                 max_val += synapse * bounds[0]
-        self._set_affine_lb(min_val)
-        self._set_affine_ub(max_val)
+        self._set_affine_bounds(min_val, max_val)
 
     def update_bounds_lp(self, layer):
         """Updates the neuron's bounds using linear programming.
@@ -71,7 +70,45 @@ class Neuron:
         """
         assert self.layer_id == layer.id + 1, "should be the previous layer"
         self._uses_lp = True
-        # TODO: implement naive bound update
+        # build affine sum linear expression
+        self._affine_le = LinExpr(self.bias)
+        for neuron_id, neuron in enumerate(layer):
+            neuron_var = neuron.get_output_var()
+            self._affine_le += self.weights_in[neuron_id] * neuron_var
+        # get optima
+        self.model.setObjective(self._affine_le, GRB.MINIMIZE)
+        self.model.optimize()
+        lb = self._affine_le.getValue()
+
+        self.model.setObjective(self._affine_le, GRB.MAXIMIZE)
+        self.model.optimize()
+        ub = self._affine_le.getValue()
+
+        self._set_affine_bounds(lb, ub)
+        self._set_relu_constraints(lb, ub)
+
+    def _set_relu_constraints(self, a, b):
+        """Set the contraints on how the output variable refers to the affine
+        input sum.
+
+        Args:
+            - a: the affine sum lower bound
+            - b: the affine sum upper bound
+
+        Note:
+            This function will panic if the affine linear expression is not
+            defined.
+        """
+        assert self._affine_le is not None, "affine LE must be non null"
+        if a > 0:
+            self.model.addConstr(self._output_var, GRB.EQUAL, self._affine_le)
+        elif b > 0:
+            self.model.addConstr(self._output_var, GRB.GREATER_EQUAL,
+                                 self._affine_le)
+            rhs = LinExpr()
+            rhs += (b / (b - a)) * self._affine_le
+            rhs += ((b * a) / (a - b))
+            self.model.addConstr(self._output_var, GRB.LESS_EQUAL, rhs)
 
     def set_bounds(self, ubound, lbound):
         """Set the bounds for the neuron manually. This is only allowed on
@@ -129,6 +166,17 @@ class Neuron:
             - a: the upper bound
         """
         self._affine_bounds[1] = a
+        self._update_output_bounds()
+
+    def _set_affine_bounds(self, a, b):
+        """Sets the affine bounds on this neuron. This automatically udpates
+        the output bounds on the neuron as well.
+
+        Args:
+            - a: the lower bound
+            - b: the upper bound
+        """
+        self._affine_bounds = [a, b]
         self._update_output_bounds()
 
     def get_output_bounds(self):
