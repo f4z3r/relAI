@@ -132,4 +132,34 @@ The inputs given to the analyser will satisfy the following properties:
 
 ## Proposed Solution
 
-TODO
+### Full Interval Propagation
+
+Perform full interval propagation on the network. This is nearly instantaneous on small networks and takes at most a few seconds on the largest networks. The precision strongly degrades as the networks get both deeper and wider.
+
+### Full Linear Programming
+
+Perform full linear programming on the network. This only takes a few seconds on the smaller networks, but can take many several minutes and up to hours on the very large networks.
+
+There seems to be massive time discrepancies between images that can and cannot be verified on the same network size. For instance, on some networks, an image can get verified in about 40 seconds using full linear programming, but another image can take up to 40 _minutes_ to be rejected on the very same network with the very same epsilon size.
+
+### Neuronwise Heuristic
+
+Produce a scoring mechanism that scores a neuron based on importance and thus chooses the best neurons on which to perform linear programming per layer.
+
+#### Weight Scores
+
+This heuristic looks at a neuron's outgoing weights to determine its score. Moreover, this score is combined with the output bounds of the neuron. In the current implementation, this is actually slower than simply performing linear programming on the entire network _for deep networks_. This might be due to inefficient sorting implementations.
+
+
+### Window Linear Programming
+
+Perform linear programming on a window of layers of the network. In this heuristic, only a few consecutive layers are modelled for linear programming. This opposes the full linear program that encodes a model all the way back to the input layer. This partial model is then moved across the network as if it were a window. This seems to have decent precision, but the time efficiency of this is not yet tested.
+
+
+### Partial Linear Programming
+
+Perform linear programming on the first few layers of the network, then resort to interval propagation.
+
+### Incomplete Linear Programming
+
+Perform linear programming by propagating the bounds of elina, and performing optimisation steps only on the very last layer, as opposed to on every neuron of the network. This has extremely good performance, but severely lacks precision on larger networks.
