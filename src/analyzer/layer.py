@@ -107,8 +107,11 @@ class Layer:
 
     def __str__(self):
         return "Layer: " + self.name +\
-               "\n  neuron count = " + str(len(self._neurons)) +\
+               "\n  neuron count = " + str(len(self)) +\
                "\n  type         = " + self._type
 
     def __iter__(self):
         return iter(self._neurons)
+
+    def __len__(self):
+        return len(self._neurons)

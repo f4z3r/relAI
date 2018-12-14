@@ -62,6 +62,7 @@ class Net:
             layer = Layer(net.model, id, weights_in, weights_out, biases,
                           layer_type)
             net._layers.append(layer)
+            net.model.update()
 
         return net
 
@@ -85,8 +86,30 @@ class Net:
             neurons respectively.
         """
         for prev_num, layer in enumerate(self.hidden_layers()):
-            self.model.update()
             layer.update_bounds_lp(self._layers[prev_num])
+            self.model.update()
+
+        return self._layers[-1].get_output_bounds()
+
+    def partial_linear_programming(self, boundary):
+        """Performs linear programming on all layers up to the boundary. Then
+        performs interval propagation from the boundary until the last layer.
+
+        Args:
+            - boundary: the boundary until which to perform linear programming.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        assert 0 < boundary < len(self._layers),\
+            "boundary must be between 0 and the layer count."
+        for prev_num, layer in enumerate(self.hidden_layers()[:boundary]):
+            layer.update_bounds_lp(self._layers[prev_num])
+            self.model.update()
+        for prev_num, layer in enumerate(self.hidden_layers()[boundary:]):
+            layer.update_bounds_naive(self._layers[prev_num])
+            self.model.update()
 
         return self._layers[-1].get_output_bounds()
 
@@ -109,7 +132,10 @@ class Net:
 
     def __str__(self):
         return "Net: " + self.name +\
-               "\n  layer count = " + str(len(self._layers))
+               "\n  layer count = " + str(len(self))
 
     def __iter__(self):
         return iter(self._layers)
+
+    def __len__(self):
+        return len(self._layers)
