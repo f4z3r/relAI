@@ -106,7 +106,7 @@ class Layer:
               programming.
             - layer: the previous layer to this one in the network.
         """
-        capacity = len(self) * fraction
+        capacity = int(len(self) * fraction)
         self.lp_score_based_absolute(func, capacity, layer)
 
     def get_best_neurons(self, func, capacity):
@@ -120,17 +120,13 @@ class Layer:
         Returns:
             A list of the IDs of the best values in the input list.
         """
-        best = []
+        assert capacity <= len(self), "capacity is greater than layer length"
+        scores = []
         for neuron in self:
             score = neuron.apply_scoring(func)
-            if len(best) < capacity:
-                best.append((neuron.id, score))
-                best.sort(key=lambda x: x[1])
-            elif best[0][1] < score:
-                best.pop(0)
-                best.append((neuron.id, score))
-                best.sort(key=lambda x: x[1])
-        return list(zip(*best))[0]
+            scores.append((neuron.id, score))
+        scores.sort(key=lambda x: x[1])
+        return list(zip(*scores))[0][-capacity:]
 
     def get_output_bounds(self):
         """Returns the output bounds of this layer.

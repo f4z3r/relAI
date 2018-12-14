@@ -120,9 +120,10 @@ class Net:
             - capacity: the absolute number of neurons per layer to choose to
               perform linear programming on.
         """
-        for prev_num, layer in enumerate(self.hidden_layers()):
+        for prev_num, layer in enumerate(self.hidden_layers())[:-1]:
             layer.lp_score_based_absolute(func, capacity,
                                           self._layers[prev_num])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
 
         return self.get_output_layer_bounds()
 
@@ -136,9 +137,10 @@ class Net:
             - fraction: the fraction of neurons per layer to choose to perform
               linear programming on.
         """
-        for prev_num, layer in enumerate(self.hidden_layers()):
+        for prev_num, layer in enumerate(self.hidden_layers())[:-1]:
             layer.lp_score_based_fraction(func, fraction,
                                           self._layers[prev_num])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
 
         return self.get_output_layer_bounds()
 
