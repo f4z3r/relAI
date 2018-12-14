@@ -198,9 +198,16 @@ def analyze(nn, LB_N0, UB_N0, label):
         elina_manager_free(man)
     else:
         net = Net.from_layers("gurobi_net", nn, LB_N0, UB_N0)
-        heuristic = heuristics.neuron_weights_out_score_diff
+        heuristic1 = heuristics.neuron_weights_out_score_diff
+        heuristic2 = heuristics.neuron_weights_out_score_lb
+        heuristic3 = heuristics.neuron_weights_out_score_ub
+        # lbounds, ubounds = net.interval_propagation()
         # lbounds, ubounds = net.linear_programming()
-        lbounds, ubounds = net.neuronwise_heuristic_per_l_fr(heuristic, 0.7)
+        # lbounds, ubounds = net.partial_linear_programming(4)
+        # lbounds, ubounds = net.incomplete_linear_programming()
+        # lbounds, ubounds = net.neuronwse_heuristic_per_l_abs(heuristic1, 20)
+        lbounds, ubounds = net.neuronwise_heuristic_per_l_fr(heuristic2, 0.7)
+        # lbounds, ubounds = net.window_linear_programming(4) TODO
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True

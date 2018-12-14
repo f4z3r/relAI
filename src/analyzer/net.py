@@ -110,6 +110,20 @@ class Net:
 
         return self.get_output_layer_bounds()
 
+    def incomplete_linear_programming(self):
+        """Perform update all contraints using interval propagation bounds and
+        perform linear programming only on the very last layer.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()[:-1]):
+            layer.update_bounds_lp_lazy(self._layers[prev_num])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
     def neuronwise_heuristic_per_l_abs(self, func, capacity):
         """Apply a neuronwise scoring heuristic on each neuron and choose the
         best `capacity` neurons to apply linear programmming. Apply interval
@@ -120,7 +134,7 @@ class Net:
             - capacity: the absolute number of neurons per layer to choose to
               perform linear programming on.
         """
-        for prev_num, layer in enumerate(self.hidden_layers())[:-1]:
+        for prev_num, layer in enumerate(self.hidden_layers()[:-1]):
             layer.lp_score_based_absolute(func, capacity,
                                           self._layers[prev_num])
         self._layers[-1].update_bounds_lp(self._layers[-2])
@@ -137,12 +151,26 @@ class Net:
             - fraction: the fraction of neurons per layer to choose to perform
               linear programming on.
         """
-        for prev_num, layer in enumerate(self.hidden_layers())[:-1]:
+        for prev_num, layer in enumerate(self.hidden_layers()[:-1]):
             layer.lp_score_based_fraction(func, fraction,
                                           self._layers[prev_num])
         self._layers[-1].update_bounds_lp(self._layers[-2])
 
         return self.get_output_layer_bounds()
+
+    def window_linear_programming(self, window_size):
+        """Perform linear programming by propagating a window over the network
+        and not keeping the model reference all the way back to the beginning
+        of the network.
+
+        Args:
+            - window_size: the number of layers contained in the window. Should
+              be at least 3.
+        """
+        # TODO implmement the function
+        # To remove constraints from the model, simply relax the output
+        # constraints to be between 0 and infinity.
+        pass
 
     def hidden_layers(self):
         """Returns the list of hidden layers contained in the network. This

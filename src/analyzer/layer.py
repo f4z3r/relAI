@@ -76,6 +76,18 @@ class Layer:
             neuron.update_bounds_lp(layer)
         self.model.update()
 
+    def update_bounds_lp_lazy(self, layer):
+        """Update the bounds on the layer using interval propagation, but
+        create dependencies with previous layer in order to have relational
+        information in later layers.
+
+        Args:
+            - layer: the previous layer to this one in the network
+        """
+        for neuron in self:
+            neuron.update_bounds_lp_lazy(layer)
+        self.model.update()
+
     def lp_score_based_absolute(self, func, capacity, layer):
         """Perform linear programming on an absolute number of neurons based
         on some scoring mechanism.

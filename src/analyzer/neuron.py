@@ -67,6 +67,23 @@ class Neuron:
                 max_val += synapse * bounds[0]
         self._set_affine_bounds(min_val, max_val)
 
+    def update_bounds_lp_lazy(self, layer):
+        """Update the bounds on the neuron using interval propagation, but
+        create dependencies with previous layer in order to have relational
+        information in later layers.
+
+        Args:
+            - layer: the layer of neurons previous to this neuron's layer
+
+        Note:
+            This lazily updates the bounds on the output variable. In order to
+            ensure model consistency, please call `model.update()` before
+            using the output variable from this neuron in an optimisation step.
+        """
+        self._uses_lp = True
+        self.update_bounds_naive(layer)
+        self._set_relu_constraints(*self._affine_bounds)
+
     def update_bounds_lp(self, layer):
         """Updates the neuron's bounds using linear programming.
 
@@ -131,8 +148,7 @@ class Neuron:
         """
         assert self._type == "input", "manual bound setting only allowd on" +\
                                       "input neurons"
-        self._set_affine_lb(lbound)
-        self._set_affine_ub(ubound)
+        self._set_affine_bounds(lbound, ubound)
 
     def set_lower_bound(self, lbound):
         """set the lower bound for the neuron manually. this is only allowed on
@@ -224,6 +240,12 @@ class Neuron:
         """
         return func(self.weights_in, self.weights_out, self._affine_bounds,
                     self._output_bounds, self.id, self.layer_id)
+
+    def remove_constraints(self):
+        """Removes the constraints set on the output variable by the ReLU if
+        this was set before."""
+        # TODO: implement this function
+        pass
 
     def _update_output_bounds(self):
         """Updates the output bounds based on the affine sum bounds of the
