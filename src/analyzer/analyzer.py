@@ -198,8 +198,6 @@ def analyze(nn, LB_N0, UB_N0, label):
     else:
         net = Net.from_layers("gurobi_net", nn, LB_N0, UB_N0)
         lbounds, ubounds = net.linear_programming()
-        print("++NET++")
-        print(lbounds, ubounds)
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True

@@ -46,6 +46,11 @@ class Neuron:
 
         Args:
             - layer: the layer of neurons previous to this neuron's layer
+
+        Note:
+            This lazily updates the bounds on the output variable. In order to
+            ensure model consistency, please call `model.update()` before
+            using the output variable from this neuron in an optimisation step.
         """
         assert self.layer_id == layer.id + 1, "should be the previous layer"
         self._uses_lp = False
@@ -67,6 +72,11 @@ class Neuron:
 
         Args:
             - layer: the layer of neurons previous to this neuron's layer
+
+        Note:
+            This lazily updates the bounds on the output variable. In order to
+            ensure model consistency, please call `model.update()` before
+            using the output variable from this neuron in an optimisation step.
         """
         assert self.layer_id == layer.id + 1, "should be the previous layer"
         self._uses_lp = True
