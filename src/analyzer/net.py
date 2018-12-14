@@ -76,7 +76,7 @@ class Net:
         for prev_num, layer in enumerate(self.hidden_layers()):
             layer.update_bounds_naive(self._layers[prev_num])
 
-        return self._layers[-1].get_output_bounds()
+        return self.get_output_layer_bounds()
 
     def linear_programming(self):
         """Perform linear programminig on the entire network.
@@ -87,9 +87,8 @@ class Net:
         """
         for prev_num, layer in enumerate(self.hidden_layers()):
             layer.update_bounds_lp(self._layers[prev_num])
-            self.model.update()
 
-        return self._layers[-1].get_output_bounds()
+        return self.get_output_layer_bounds()
 
     def partial_linear_programming(self, boundary):
         """Performs linear programming on all layers up to the boundary. Then
@@ -106,12 +105,42 @@ class Net:
             "boundary must be between 0 and the layer count."
         for prev_num, layer in enumerate(self.hidden_layers()[:boundary]):
             layer.update_bounds_lp(self._layers[prev_num])
-            self.model.update()
         for prev_num, layer in enumerate(self.hidden_layers()[boundary:]):
             layer.update_bounds_naive(self._layers[prev_num])
-            self.model.update()
 
-        return self._layers[-1].get_output_bounds()
+        return self.get_output_layer_bounds()
+
+    def neuronwise_heuristic_per_l_abs(self, func, capacity):
+        """Apply a neuronwise scoring heuristic on each neuron and choose the
+        best `capacity` neurons to apply linear programmming. Apply interval
+        propagation on the remaining neurons.
+
+        Args:
+            - func: the neuronwise scoring heuristic.
+            - capacity: the absolute number of neurons per layer to choose to
+              perform linear programming on.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()):
+            layer.lp_score_based_absolute(func, capacity,
+                                          self._layers[prev_num])
+
+        return self.get_output_layer_bounds()
+
+    def neuronwise_heuristic_per_l_fr(self, func, fraction):
+        """Apply a neuronwise scoring heuristic on each neuron and choose the
+        best `capacity` neurons to apply linear programmming. Apply interval
+        propagation on the remaining neurons.
+
+        Args:
+            - func: the neuronwise scoring heuristic.
+            - fraction: the fraction of neurons per layer to choose to perform
+              linear programming on.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()):
+            layer.lp_score_based_fraction(func, fraction,
+                                          self._layers[prev_num])
+
+        return self.get_output_layer_bounds()
 
     def hidden_layers(self):
         """Returns the list of hidden layers contained in the network. This
@@ -121,6 +150,15 @@ class Net:
             A list of layers.
         """
         return self._layers[1:]
+
+    def get_output_layer_bounds(self):
+        """Return the output bounds of the final layer of the network.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the final
+            layer respectively.
+        """
+        return self._layers[-1].get_output_bounds()
 
     def print_debug_info(self):
         """Prints debug information about the state of the network."""

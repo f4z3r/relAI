@@ -19,6 +19,7 @@ from gurobipy import *
 import time
 
 from net import Net
+import heuristics
 
 libc = CDLL(find_library('c'))
 cstdout = c_void_p.in_dll(libc, 'stdout')
@@ -197,7 +198,9 @@ def analyze(nn, LB_N0, UB_N0, label):
         elina_manager_free(man)
     else:
         net = Net.from_layers("gurobi_net", nn, LB_N0, UB_N0)
-        lbounds, ubounds = net.linear_programming()
+        heuristic = heuristics.neuron_weights_out_score_diff
+        # lbounds, ubounds = net.linear_programming()
+        lbounds, ubounds = net.neuronwise_heuristic_per_l_fr(heuristic, 0.7)
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True

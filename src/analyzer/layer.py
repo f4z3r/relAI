@@ -54,22 +54,6 @@ class Layer:
 
             self._neurons.append(neuron)
 
-    @staticmethod
-    def convert_weights_out(weights_out):
-        """Converts a list of lists for the next neuron inputs into another
-        list of lists where the primary key reflects the neurons on the
-        current layer.
-
-        Args:
-            - weights_out: a list of lists where the primary key is the
-              receiver of the weights.
-
-        Returns:
-             A list of lists where the primary key is the sender of the
-        weights.
-        """
-        return list(zip(*weights_out))
-
     def update_bounds_naive(self, layer):
         """Update the bounds of each neuron in the layer using a naive
         approach.
@@ -79,6 +63,7 @@ class Layer:
         """
         for neuron in self:
             neuron.update_bounds_naive(layer)
+        self.model.update()
 
     def update_bounds_lp(self, layer):
         """Update the bounds of each neuron in the layer using linear
@@ -89,6 +74,63 @@ class Layer:
         """
         for neuron in self:
             neuron.update_bounds_lp(layer)
+        self.model.update()
+
+    def lp_score_based_absolute(self, func, capacity, layer):
+        """Perform linear programming on an absolute number of neurons based
+        on some scoring mechanism.
+
+        Args:
+            - func: the neuron-wise heuristic used to compute the score of each
+              neuron.
+            - capacity: the absolute number of best scoring neurons on which
+              to perform linear programming.
+            - layer: the previous layer to this one in the network.
+        """
+        best = self.get_best_neurons(func, capacity)
+        for neuron in self:
+            if neuron.id in best:
+                neuron.update_bounds_lp(layer)
+            else:
+                neuron.update_bounds_naive(layer)
+        self.model.update()
+
+    def lp_score_based_fraction(self, func, fraction, layer):
+        """Perform linear programming on an fraction of neurons based on some
+        scoring mechanism.
+
+        Args:
+            - func: the neuron-wise heuristic used to compute the score of each
+              neuron.
+            - fraction: the fraction of the neuron on which to apply linear
+              programming.
+            - layer: the previous layer to this one in the network.
+        """
+        capacity = len(self) * fraction
+        self.lp_score_based_absolute(func, capacity, layer)
+
+    def get_best_neurons(self, func, capacity):
+        """Returns the best `capacity` neurons' IDs based on the `func`
+        function.
+
+        Args:
+            - func: the scoring function to apply to the neurons.
+            - capacity: the best to select.
+
+        Returns:
+            A list of the IDs of the best values in the input list.
+        """
+        best = []
+        for neuron in self:
+            score = neuron.apply_scoring(func)
+            if len(best) < capacity:
+                best.append((neuron.id, score))
+                best.sort(key=lambda x: x[1])
+            elif best[0][1] < score:
+                best.pop(0)
+                best.append((neuron.id, score))
+                best.sort(key=lambda x: x[1])
+        return list(zip(*best))[0]
 
     def get_output_bounds(self):
         """Returns the output bounds of this layer.
@@ -115,3 +157,19 @@ class Layer:
 
     def __len__(self):
         return len(self._neurons)
+
+    @staticmethod
+    def convert_weights_out(weights_out):
+        """Converts a list of lists for the next neuron inputs into another
+        list of lists where the primary key reflects the neurons on the
+        current layer.
+
+        Args:
+            - weights_out: a list of lists where the primary key is the
+              receiver of the weights.
+
+        Returns:
+             A list of lists where the primary key is the sender of the
+        weights.
+        """
+        return list(zip(*weights_out))

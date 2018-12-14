@@ -206,6 +206,25 @@ class Neuron:
         """
         return self._output_var
 
+    def apply_scoring(self, func):
+        """Apply some scoring mechanism based on the neuron's internal values.
+        The available values are the weights coming in to the neuron, the
+        weights going out, the upper and lower bounds of the affine sum and
+        the upper and lower bounds of the relu of the neuron. On top of that,
+        the neuron id and layer id are also passed to the scoring function.
+
+        Args:
+            - func: a scoring function. This should take the weights in, the
+              weights out, the affine sum bounds, the output bounds, the
+              neuron's ID, and its layer ID as arguments. Moreover it should
+              return an number.
+
+        Returns:
+            A numerical score.
+        """
+        return func(self.weights_in, self.weights_out, self._affine_bounds,
+                    self._output_bounds, self.id, self.layer_id)
+
     def _update_output_bounds(self):
         """Updates the output bounds based on the affine sum bounds of the
         neuron."""
