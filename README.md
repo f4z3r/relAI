@@ -132,6 +132,26 @@ The inputs given to the analyser will satisfy the following properties:
 
 ## Proposed Solution
 
+In order to add full log information use the following in this file:
+
+```
+<details>
+  <summary>network_name(espilon)</summary>
+  log file here
+</details>
+```
+
+This will create something like:
+
+<details>
+  <summary>6x50 (0.01)</summary>
+  log information here
+  some more information
+  ```
+  use triple ticks for monospace
+  ```
+</details>
+
 ### Full Interval Propagation - implemented
 
 Perform full interval propagation on the network. This is nearly instantaneous on small networks and takes at most a few seconds on the largest networks. The precision strongly degrades as the networks get both deeper and wider.
@@ -182,3 +202,21 @@ Perform linear programming on the first few layers of the network, then resort t
 ### Incomplete Linear Programming - implemented
 
 Perform linear programming by propagating the bounds of elina, and performing optimisation steps only on the very last layer, as opposed to on every neuron of the network. This has extremely good performance, but severely lacks precision on larger networks.
+
+### Back-Propagation - implemented
+
+Perform interval propagation to have a general idea of the intervals each neuron can take. Then, starting at the output layer:
+
+1. For each neuron `n`:
+   - Check which neurons can affect its value the most. This is performed by checking the possible interval size of each incoming neuron `m` and multiplying it by the weight between `m` and `n`. This gives a general extimation how much `m` affect the output interval of `n`.
+   - Based on the scores computed in the previous step, take the highest `capacity` neurons that affect neuron `n` and store them.
+2. Compute the union of all high impact sets returned.
+3. Repeat from step 1 using the previous layer (layer that so far contained the `m` neurons), but only check for high impact neurons in the list returned from step 2. Back-propagate like this until the input layer is reached.
+4. We now have a list of high impact neuron sets for each layer:
+   - Starting at the first hidden layer, compute linear programming for the high impact neurons on this layer, and perform interval propagation on all other neurons of this layer.
+
+By default, all neurons in the output layer are considered "high impact", hence linear programming will always be performed on all output neurons.
+
+#### Notes
+
+This strategy seems to reduce runtime quite significantly compared to linear programming and should mostly be used on the 4x1024 network. It seems that a good estimate for the `capacity` variable is the number of neurons in the hidden layer divided by the number of nuerons in the output layer (hence about 100 for the 4x1024 network). The time efficiency is not yet properly investigated.

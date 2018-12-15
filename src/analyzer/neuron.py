@@ -207,6 +207,27 @@ class Neuron:
         self_uses_lp = False
         self.model.remove(self._relu_constraints)
 
+    def high_impact_idxs(self, layer, capacity):
+        """Gets the neurons having a large impact on this neuron's value. This
+        function actually returns the indexes of the high impact neurons.
+
+        Args:
+            - layer: the layer previous to the one of this neuron in the
+              network.
+            - capacity: the number of high impact neurons to recover.
+
+        Returns:
+            A *set* of indexes of the neurons in the previous layer.
+        """
+        scores = []
+        for idx, neuron in enumerate(layer):
+            synapse = self.weights_in[idx]
+            bounds = neuron.get_output_bounds()
+            score = abs(synapse) * (bounds[1] - bounds[0])
+            scores.append((neuron.id, score))
+        scores.sort(key=lambda x: x[1])
+        return set(list(zip(*scores))[0][-capacity:])
+
     def _set_relu_constraints(self, a, b):
         """Set the contraints on how the output variable refers to the affine
         input sum.
