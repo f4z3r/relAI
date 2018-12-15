@@ -81,7 +81,14 @@ class Neuron:
             ensure model consistency, please call `model.update()` before
             using the output variable from this neuron in an optimisation step.
         """
+        assert self.layer_id == layer.id + 1, "should be the previous layer"
         self._uses_lp = True
+        # build affine sum linear expression
+        self._affine_le = LinExpr(self.bias)
+        for neuron_id, neuron in enumerate(layer):
+            neuron_var = neuron.get_output_var()
+            self._affine_le += self.weights_in[neuron_id] * neuron_var
+
         self.update_bounds_naive(layer)
         self._set_relu_constraints(*self._affine_bounds)
 

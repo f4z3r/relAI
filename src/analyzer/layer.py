@@ -124,7 +124,6 @@ class Layer:
               programming.
             - layer: the previous layer to this one in the network.
         """
-        self._uses_lp = "mixed"
         capacity = int(len(self) * fraction)
         self.lp_score_based_absolute(func, capacity, layer)
 
