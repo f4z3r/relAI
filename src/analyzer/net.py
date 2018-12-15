@@ -62,7 +62,6 @@ class Net:
             layer = Layer(net.model, id, weights_in, weights_out, biases,
                           layer_type)
             net._layers.append(layer)
-            net.model.update()
 
         return net
 
@@ -165,12 +164,19 @@ class Net:
 
         Args:
             - window_size: the number of layers contained in the window. Should
-              be at least 3.
+              be at least 2. If this is 4, it means the window will keep the
+              relational links to the previous layer for the last 4 layers,
+              including the current one. Thus 1 does not make sense, as it does
+              not provide better precision as simple interval propagation.
         """
-        # TODO implmement the function
-        # To remove constraints from the model, simply relax the output
-        # constraints to be between 0 and infinity.
-        pass
+        assert window_size >= 2, "window size must be at least 2"
+        for prev_num, layer in enumerate(self.hidden_layers()):
+            window_tail = prev_num - window_size + 1
+            if window_tail > 0:
+                self._layers[window_tail].remove_lp_constraints()
+            layer.update_bounds_lp(self._layers[prev_num])
+
+        return self.get_output_layer_bounds()
 
     def hidden_layers(self):
         """Returns the list of hidden layers contained in the network. This

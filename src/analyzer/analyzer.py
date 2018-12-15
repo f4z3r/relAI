@@ -206,8 +206,10 @@ def analyze(nn, LB_N0, UB_N0, label):
         # lbounds, ubounds = net.partial_linear_programming(4)
         # lbounds, ubounds = net.incomplete_linear_programming()
         # lbounds, ubounds = net.neuronwse_heuristic_per_l_abs(heuristic1, 20)
-        lbounds, ubounds = net.neuronwise_heuristic_per_l_fr(heuristic2, 0.7)
-        # lbounds, ubounds = net.window_linear_programming(4) TODO
+        # lbounds, ubounds = net.neuronwise_heuristic_per_l_fr(heuristic2, 0.7)
+        lbounds, ubounds = net.window_linear_programming(4)
+        for layer in net:
+            print(str(layer))
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True

@@ -151,10 +151,29 @@ Produce a scoring mechanism that scores a neuron based on importance and thus ch
 This heuristic looks at a neuron's outgoing weights to determine its score. Moreover, this score is combined with the output bounds of the neuron. In the current implementation, this is actually slower than simply performing linear programming on the entire network _for deep networks_. This might be due to inefficient sorting implementations.
 
 
-### Window Linear Programming - TODO
+### Window Linear Programming - implemented
 
 Perform linear programming on a window of layers of the network. In this heuristic, only a few consecutive layers are modelled for linear programming. This opposes the full linear program that encodes a model all the way back to the input layer. This partial model is then moved across the network as if it were a window. This seems to have decent precision, but the time efficiency of this is not yet tested.
 
+This currently seems to be by far the most promising technique. It verifies with very high precision but takes a fraction of the time of full linear programming.
+
+#### Notes
+
+Window linear programming only makes real sense to perform on the networks having 9 layers. On networks with less layers, the window size must be nearly the entire network, hence full linear programming is a better choice.
+
+##### 9x100
+
+When running this heuristic on the `mnist_relu_9_100` network with an epsilon of 0.01, an overall precision of 78% is reached (with a `window_size` of `4`). The ground thruth of this data set is not available but comparably to the available data, this seems to be extremely close to the ground truth. In the detail:
+
+- network: `mnist_relu_9_100`
+- epsilon: 0.01
+- 78% overall precision
+- about 15.5 seconds per image on average
+- fastest verification: image 82 in 7 seconds
+- slowest verification: image 37 in 19 seconds
+- fastest fail: image 73/38 in 1 second
+- slowest fail: image 43 in 79 seconds
+- speedup compared to full linear programming seems to be between factor 1.5 and factor 2
 
 ### Partial Linear Programming - implemented
 
