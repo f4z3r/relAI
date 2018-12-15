@@ -36,6 +36,7 @@ class Layer:
         self.name = "layer({0})".format(id)
         self._type = _type
         self._neurons = []
+        self._uses_lp = "N/A"
         if weights_out is not None:
             weights_out = Layer.convert_weights_out(weights_out)
 
@@ -53,22 +54,7 @@ class Layer:
                 neuron.set_upper_bound(ubounds[neuron_id])
 
             self._neurons.append(neuron)
-
-    @staticmethod
-    def convert_weights_out(weights_out):
-        """Converts a list of lists for the next neuron inputs into another
-        list of lists where the primary key reflects the neurons on the
-        current layer.
-
-        Args:
-            - weights_out: a list of lists where the primary key is the
-              receiver of the weights.
-
-        Returns:
-             A list of lists where the primary key is the sender of the
-        weights.
-        """
-        return list(zip(*weights_out))
+        self.model.update()
 
     def update_bounds_naive(self, layer):
         """Update the bounds of each neuron in the layer using a naive
@@ -77,8 +63,10 @@ class Layer:
         Args:
             - layer: the previous layer to this one in the network
         """
+        self._uses_lp = "no"
         for neuron in self:
             neuron.update_bounds_naive(layer)
+        self.model.update()
 
     def update_bounds_lp(self, layer):
         """Update the bounds of each neuron in the layer using linear
@@ -87,8 +75,84 @@ class Layer:
         Args:
             - layer: the previous layer to this one in the network
         """
+        self._uses_lp = "yes"
         for neuron in self:
             neuron.update_bounds_lp(layer)
+        self.model.update()
+
+    def update_bounds_lp_lazy(self, layer):
+        """Update the bounds on the layer using interval propagation, but
+        create dependencies with previous layer in order to have relational
+        information in later layers.
+
+        Args:
+            - layer: the previous layer to this one in the network
+        """
+        self._uses_lp = "lazy"
+        for neuron in self:
+            neuron.update_bounds_lp_lazy(layer)
+        self.model.update()
+
+    def lp_score_based_absolute(self, func, capacity, layer):
+        """Perform linear programming on an absolute number of neurons based
+        on some scoring mechanism.
+
+        Args:
+            - func: the neuron-wise heuristic used to compute the score of each
+              neuron.
+            - capacity: the absolute number of best scoring neurons on which
+              to perform linear programming.
+            - layer: the previous layer to this one in the network.
+        """
+        self._uses_lp = "mixed"
+        best = self.get_best_neurons(func, capacity)
+        for neuron in self:
+            if neuron.id in best:
+                neuron.update_bounds_lp(layer)
+            else:
+                neuron.update_bounds_naive(layer)
+        self.model.update()
+
+    def lp_score_based_fraction(self, func, fraction, layer):
+        """Perform linear programming on an fraction of neurons based on some
+        scoring mechanism.
+
+        Args:
+            - func: the neuron-wise heuristic used to compute the score of each
+              neuron.
+            - fraction: the fraction of the neuron on which to apply linear
+              programming.
+            - layer: the previous layer to this one in the network.
+        """
+        capacity = int(len(self) * fraction)
+        self.lp_score_based_absolute(func, capacity, layer)
+
+    def remove_lp_constraints(self):
+        """Removes all linear programming constraints from all neurons in this
+        layer."""
+        self._uses_lp = "yes, removed from model"
+        for neuron in self:
+            neuron.remove_lp_constraints()
+        self.model.update()
+
+    def get_best_neurons(self, func, capacity):
+        """Returns the best `capacity` neurons' IDs based on the `func`
+        function.
+
+        Args:
+            - func: the scoring function to apply to the neurons.
+            - capacity: the best to select.
+
+        Returns:
+            A list of the IDs of the best values in the input list.
+        """
+        assert capacity <= len(self), "capacity is greater than layer length"
+        scores = []
+        for neuron in self:
+            score = neuron.apply_scoring(func)
+            scores.append((neuron.id, score))
+        scores.sort(key=lambda x: x[1])
+        return list(zip(*scores))[0][-capacity:]
 
     def get_output_bounds(self):
         """Returns the output bounds of this layer.
@@ -108,10 +172,27 @@ class Layer:
     def __str__(self):
         return "Layer: " + self.name +\
                "\n  neuron count = " + str(len(self)) +\
-               "\n  type         = " + self._type
+               "\n  type         = " + self._type +\
+               "\n  uses LP      = " + self._uses_lp
 
     def __iter__(self):
         return iter(self._neurons)
 
     def __len__(self):
         return len(self._neurons)
+
+    @staticmethod
+    def convert_weights_out(weights_out):
+        """Converts a list of lists for the next neuron inputs into another
+        list of lists where the primary key reflects the neurons on the
+        current layer.
+
+        Args:
+            - weights_out: a list of lists where the primary key is the
+              receiver of the weights.
+
+        Returns:
+             A list of lists where the primary key is the sender of the
+        weights.
+        """
+        return list(zip(*weights_out))

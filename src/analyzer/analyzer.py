@@ -19,6 +19,7 @@ from gurobipy import *
 import time
 
 from net import Net
+import heuristics
 
 libc = CDLL(find_library('c'))
 cstdout = c_void_p.in_dll(libc, 'stdout')
@@ -197,7 +198,26 @@ def analyze(nn, LB_N0, UB_N0, label):
         elina_manager_free(man)
     else:
         net = Net.from_layers("gurobi_net", nn, LB_N0, UB_N0)
-        lbounds, ubounds = net.linear_programming()
+        heuristic1 = heuristics.neuron_weights_out_score_diff
+        heuristic2 = heuristics.neuron_weights_out_score_lb
+        heuristic3 = heuristics.neuron_weights_out_score_ub
+        # lbounds, ubounds = net.linear_programming()
+        # lbounds, ubounds = net.interval_propagation()
+        # lbounds, ubounds = net.interval_propagation_from(4)
+        # lbounds, ubounds = net.incomplete_linear_programming()
+        # lbounds, ubounds = net.incomplete_linear_programming_from(4)
+        # lbounds, ubounds = net.incomplete_linear_programming_reset_from(4)
+        # lbounds, ubounds = net.neuronwise_heuristic_per_l_abs(heuristic1, 20)
+        # lbounds, ubounds = net.neuronwise_heuristic_per_l_abs_from(heuristic1, 20, 4)
+        # lbounds, ubounds = net.neuronwise_heuristic_per_l_abs_reset_from(heuristic1, 20, 4)
+        # lbounds, ubounds = net.neuronwise_heuristic_per_l_fr(heuristic2, 0.7)
+        # lbounds, ubounds = net.neuronwise_heuristic_per_l_fr_from(heuristic2, 0.7, 4)
+        # lbounds, ubounds = net.neuronwise_heuristic_per_l_fr_reset_from(heuristic2, 0.7, 4)
+        lbounds, ubounds = net.window_linear_programming(4)
+
+        # print some information about the network
+        # for layer in net:
+        #     print(str(layer))
 
     # if epsilon is zero, try to classify else verify robustness
     verified_flag = True

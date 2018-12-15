@@ -62,9 +62,20 @@ class Net:
             layer = Layer(net.model, id, weights_in, weights_out, biases,
                           layer_type)
             net._layers.append(layer)
-            net.model.update()
 
         return net
+
+    def linear_programming(self):
+        """Perform linear programminig on the entire network.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()):
+            layer.update_bounds_lp(self._layers[prev_num])
+
+        return self.get_output_layer_bounds()
 
     def interval_propagation(self):
         """Perform interval propagation on the entire network.
@@ -76,42 +87,263 @@ class Net:
         for prev_num, layer in enumerate(self.hidden_layers()):
             layer.update_bounds_naive(self._layers[prev_num])
 
-        return self._layers[-1].get_output_bounds()
+        return self.get_output_layer_bounds()
 
-    def linear_programming(self):
-        """Perform linear programminig on the entire network.
-
-        Returns:
-            Two lists representing the lower and upper bounds of the output
-            neurons respectively.
-        """
-        for prev_num, layer in enumerate(self.hidden_layers()):
-            layer.update_bounds_lp(self._layers[prev_num])
-            self.model.update()
-
-        return self._layers[-1].get_output_bounds()
-
-    def partial_linear_programming(self, boundary):
+    def interval_propagation_from(self, boundary):
         """Performs linear programming on all layers up to the boundary. Then
         performs interval propagation from the boundary until the last layer.
 
         Args:
-            - boundary: the boundary until which to perform linear programming.
+            - boundary: the boundary where to start interval propagation.
 
         Returns:
             Two lists representing the lower and upper bounds of the output
             neurons respectively.
         """
-        assert 0 < boundary < len(self._layers),\
-            "boundary must be between 0 and the layer count."
-        for prev_num, layer in enumerate(self.hidden_layers()[:boundary]):
-            layer.update_bounds_lp(self._layers[prev_num])
-            self.model.update()
-        for prev_num, layer in enumerate(self.hidden_layers()[boundary:]):
-            layer.update_bounds_naive(self._layers[prev_num])
-            self.model.update()
+        self._validate_boundary(boundary)
+        self._linear_programming_until(boundary)
 
-        return self._layers[-1].get_output_bounds()
+        for prev_num, layer in enumerate(self.hidden_layers()[boundary:]):
+            prev_layer = prev_num + boundary
+            layer.update_bounds_naive(self._layers[prev_layer])
+
+        return self.get_output_layer_bounds()
+
+    def incomplete_linear_programming(self):
+        """Perform update all contraints using interval propagation bounds and
+        perform linear programming only on the very last layer.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()[:-1]):
+            layer.update_bounds_lp_lazy(self._layers[prev_num])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def incomplete_linear_programming_from(self, boundary):
+        """Performs linear programming on all layers up to the boundary. Then
+        performs incomplete linear programming from the boundary until the last
+        layer. Note that keeps the constraints from the initial model on which
+        linear programming is performed.
+
+        Args:
+            - boundary: the boundary where to start interval propagation.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        self._validate_boundary(boundary)
+        self._linear_programming_until(boundary)
+
+        for prev_num, layer in enumerate(self.hidden_layers()[boundary:-1]):
+            prev_layer = prev_num + boundary
+            layer.update_bounds_lp_lazy(self._layers[prev_layer])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def incomplete_linear_programming_reset_from(self, boundary):
+        """Performs linear programming on all layers up to the boundary. Then
+        performs incomplete linear programming from the boundary until the last
+        layer. Note that this resets the constraints of the initial linear
+        programming, hence the second part is truly incomplete.
+
+        Args:
+            - boundary: the boundary where to start interval propagation.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        self._validate_boundary(boundary)
+        self._linear_programming_until(boundary)
+
+        # this line decouples the model from the first part
+        self._layers[boundary-1].remove_lp_constraints()
+
+        for prev_num, layer in enumerate(self.hidden_layers()[boundary:-1]):
+            prev_layer = prev_num + boundary
+            layer.update_bounds_lp_lazy(self._layers[prev_layer])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def neuronwise_heuristic_per_l_abs(self, func, capacity):
+        """Apply a neuronwise scoring heuristic on each neuron and choose the
+        best `capacity` neurons to apply linear programmming. Apply interval
+        propagation on the remaining neurons.
+
+        Args:
+            - func: the neuronwise scoring heuristic.
+            - capacity: the absolute number of neurons per layer to choose to
+              perform linear programming on.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()[:-1]):
+            layer.lp_score_based_absolute(func, capacity,
+                                          self._layers[prev_num])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def neuronwise_heuristic_per_l_abs_from(self, func, capacity, boundary):
+        """Performs linear programming on all layers up to the boundary. Then
+        performs incomplete linear programming from the boundary until the last
+        layer. Note that keeps the constraints from the initial model on which
+        linear programming is performed.
+
+        Args:
+            - func: the neuronwise scoring heuristic.
+            - capacity: the absolute number of neurons per layer to choose to
+              perform linear programming on.
+            - boundary: the boundary where to start interval propagation.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        self._validate_boundary(boundary)
+        self._linear_programming_until(boundary)
+
+        for prev_num, layer in enumerate(self.hidden_layers()[boundary:-1]):
+            prev_layer = prev_num + boundary
+            layer.lp_score_based_absolute(func, capacity,
+                                          self._layers[prev_layer])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def neuronwise_heuristic_per_l_abs_reset_from(self, func, capacity,
+                                                  boundary):
+        """Performs linear programming on all layers up to the boundary. Then
+        performs incomplete linear programming from the boundary until the last
+        layer. Note that this resets the constraints of the initial linear
+        programming, hecne the second part is truly performed only on selected
+        neurons.
+
+        Args:
+            - func: the neuronwise scoring heuristic.
+            - capacity: the absolute number of neurons per layer to choose to
+              perform linear programming on.
+            - boundary: the boundary where to start interval propagation.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        self._validate_boundary(boundary)
+        self._linear_programming_until(boundary)
+
+        # this line decouples the model from the first part
+        self._layers[boundary-1].remove_lp_constraints()
+
+        for prev_num, layer in enumerate(self.hidden_layers()[boundary:-1]):
+            prev_layer = prev_num + boundary
+            layer.lp_score_based_absolute(func, capacity,
+                                          self._layers[prev_layer])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def neuronwise_heuristic_per_l_fr(self, func, fraction):
+        """Apply a neuronwise scoring heuristic on each neuron and choose the
+        best `capacity` neurons to apply linear programmming. Apply interval
+        propagation on the remaining neurons.
+
+        Args:
+            - func: the neuronwise scoring heuristic.
+            - fraction: the fraction of neurons per layer to choose to perform
+              linear programming on.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()[:-1]):
+            layer.lp_score_based_fraction(func, fraction,
+                                          self._layers[prev_num])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def neuronwise_heuristic_per_l_fr_from(self, func, fraction, boundary):
+        """Performs linear programming on all layers up to the boundary. Then
+        performs incomplete linear programming from the boundary until the last
+        layer. Note that keeps the constraints from the initial model on which
+        linear programming is performed.
+
+        Args:
+            - func: the neuronwise scoring heuristic.
+            - fraction: the fraction of neurons per layer to choose to perform
+              linear programming on.
+            - boundary: the boundary where to start interval propagation.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        self._validate_boundary(boundary)
+        self._linear_programming_until(boundary)
+
+        for prev_num, layer in enumerate(self.hidden_layers()[boundary:-1]):
+            prev_layer = prev_num + boundary
+            layer.lp_score_based_fraction(func, fraction,
+                                          self._layers[prev_layer])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def neuronwise_heuristic_per_l_fr_reset_from(self, func, fraction,
+                                                  boundary):
+        """Performs linear programming on all layers up to the boundary. Then
+        performs incomplete linear programming from the boundary until the last
+        layer. Note that this resets the constraints of the initial linear
+        programming, hecne the second part is truly performed only on selected
+        neurons.
+
+        Args:
+            - func: the neuronwise scoring heuristic.
+            - fraction: the fraction of neurons per layer to choose to perform
+              linear programming on.
+            - boundary: the boundary where to start interval propagation.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the output
+            neurons respectively.
+        """
+        self._validate_boundary(boundary)
+        self._linear_programming_until(boundary)
+
+        # this line decouples the model from the first part
+        self._layers[boundary-1].remove_lp_constraints()
+
+        for prev_num, layer in enumerate(self.hidden_layers()[boundary:-1]):
+            prev_layer = prev_num + boundary
+            layer.lp_score_based_fraction(func, fraction,
+                                          self._layers[prev_layer])
+        self._layers[-1].update_bounds_lp(self._layers[-2])
+
+        return self.get_output_layer_bounds()
+
+    def window_linear_programming(self, window_size):
+        """Perform linear programming by propagating a window over the network
+        and not keeping the model reference all the way back to the beginning
+        of the network.
+
+        Args:
+            - window_size: the number of layers contained in the window. Should
+              be at least 2. If this is 4, it means the window will keep the
+              relational links to the previous layer for the last 4 layers,
+              including the current one. Thus 1 does not make sense, as it does
+              not provide better precision as simple interval propagation.
+        """
+        assert window_size >= 2, "window size must be at least 2"
+        for prev_num, layer in enumerate(self.hidden_layers()):
+            window_tail = prev_num - window_size + 1
+            if window_tail > 0:
+                self._layers[window_tail].remove_lp_constraints()
+            layer.update_bounds_lp(self._layers[prev_num])
+
+        return self.get_output_layer_bounds()
 
     def hidden_layers(self):
         """Returns the list of hidden layers contained in the network. This
@@ -122,6 +354,15 @@ class Net:
         """
         return self._layers[1:]
 
+    def get_output_layer_bounds(self):
+        """Return the output bounds of the final layer of the network.
+
+        Returns:
+            Two lists representing the lower and upper bounds of the final
+            layer respectively.
+        """
+        return self._layers[-1].get_output_bounds()
+
     def print_debug_info(self):
         """Prints debug information about the state of the network."""
         print(str(self))
@@ -129,6 +370,25 @@ class Net:
             print(str(layer))
             for neuron in layer:
                 print(str(neuron))
+
+    def _validate_boundary(self, boundary):
+        """Validates a boundary. This throws an `AssertionError` if the
+        boundary is not valid.
+
+        Args:
+            - boundary: the boundary to validate.
+        """
+        assert 0 < boundary < len(self._layers),\
+            "boundary must be between 0 and the layer count."
+    def _linear_programming_until(self, layer):
+        """Perform linear programming until some layer.
+
+        Args:
+            - layer: the layer number until which to perform linear
+              programming. This should be larger than 0.
+        """
+        for prev_num, layer in enumerate(self.hidden_layers()[:layer]):
+            layer.update_bounds_lp(self._layers[prev_num])
 
     def __str__(self):
         return "Net: " + self.name +\
