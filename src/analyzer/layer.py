@@ -80,6 +80,22 @@ class Layer:
             neuron.update_bounds_lp(layer)
         self.model.update()
 
+    def update_bounds_lp_subset(self, layer, subset):
+        """Update the bounds of the indexed neurons in the layer using linear
+        programming. The rest is updated using naive interval propagation.
+
+        Args:
+            - layer: the previous layer to this one in the network.
+            - subset: a set of indexes of this layer on which to perform LP.
+        """
+        self._uses_lp = "mixed"
+        for neuron in self:
+            if neuron.id in subset:
+                neuron.update_bounds_lp(layer)
+            else:
+                neuron.update_bounds_naive(layer)
+        self.model.update()
+
     def update_bounds_lp_lazy(self, layer):
         """Update the bounds on the layer using interval propagation, but
         create dependencies with previous layer in order to have relational
@@ -153,6 +169,26 @@ class Layer:
             scores.append((neuron.id, score))
         scores.sort(key=lambda x: x[1])
         return list(zip(*scores))[0][-capacity:]
+
+    def high_impact_idxs(self, layer, capacity, index_list):
+        """Gets the neurons having a large impact on this layer's neuron values
+        for the neurons indicated in the `index_list`.
+
+        Args:
+            - layer: the layer previous to this one in the network.
+            - capacity: the number of highest impact neurons to pick for each
+              neuron in the `index_list`.
+            - index_list: the list of important neurons in this layer for which
+              to check for high impact neurons.
+
+        Returns:
+            A *set* of indexes of the important neurons in the previous layer.
+        """
+        high_impact_neurons = set()
+        for idx in index_list:
+            neuron = self._neurons[idx]
+            high_impact_neurons |= neuron.high_impact_idxs(layer, capacity)
+        return high_impact_neurons
 
     def get_output_bounds(self):
         """Returns the output bounds of this layer.
