@@ -223,7 +223,7 @@ class Neuron:
         for idx, neuron in enumerate(layer):
             synapse = self.weights_in[idx]
             bounds = neuron.get_output_bounds()
-            score = abs(synapse) * (bounds[1] - bounds[0])
+            score = synapse * (bounds[1] - bounds[0])
             scores.append((neuron.id, score))
         scores.sort(key=lambda x: x[1])
         return set(list(zip(*scores))[0][-capacity:])
