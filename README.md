@@ -162,6 +162,57 @@ Perform full linear programming on the network. This only takes a few seconds on
 
 There seems to be massive time discrepancies between images that can and cannot be verified on the same network size. For instance, on some networks, an image can get verified in about 40 seconds using full linear programming, but another image can take up to 40 _minutes_ to be rejected on the very same network with the very same epsilon size.
 
+#### Notes
+
+<details>
+  <summary>3x10 (0.1)</summary>
+
+  [log file](./logs/3_10_0.1_full_lp.log)
+
+</details>
+
+<details>
+  <summary>3x20 (0.1)</summary>
+
+  [log file](./logs/3_20_0.1_full_lp.log)
+
+</details>
+
+<details>
+  <summary>3x50 (0.1)</summary>
+
+  [log file](./logs/3_50_0.1_full_lp.log)
+
+</details>
+
+<details>
+  <summary>6x20 (0.1)</summary>
+
+  [log file](./logs/6_20_0.1_full_lp.log)
+
+</details>
+
+<details>
+  <summary>6x50 (0.1)</summary>
+
+  [log file](./logs/6_50_0.1_full_lp.log)
+
+</details>
+
+<details>
+  <summary>6x100 (0.1)</summary>
+
+  [log file](./logs/6_100_0.1_full_lp.log)
+
+</details>
+
+<details>
+  <summary>6x200 (0.1) -- partial</summary>
+
+  [log file](./logs/6_200_0.1_full_lp_partial.log)
+
+</details>
+
 ### Neuronwise Heuristic
 
 Produce a scoring mechanism that scores a neuron based on importance and thus chooses the best neurons on which to perform linear programming per layer.
@@ -181,19 +232,23 @@ This currently seems to be by far the most promising technique. It verifies with
 
 Window linear programming only makes real sense to perform on the networks having 9 layers. On networks with less layers, the window size must be nearly the entire network, hence full linear programming is a better choice.
 
-##### 9x100
+<details>
+  <summary>9x100</summary>
 
-When running this heuristic on the `mnist_relu_9_100` network with an epsilon of 0.01, an overall precision of 78% is reached (with a `window_size` of `4`). The ground thruth of this data set is not available but comparably to the available data, this seems to be extremely close to the ground truth. In the detail:
+  When running this heuristic on the `mnist_relu_9_100` network with an epsilon of 0.01, an overall precision of 78% is reached (with a `window_size` of `4`). The ground thruth of this data set is not available but comparably to the available data, this seems to be extremely close to the ground truth. In the detail:
 
-- network: `mnist_relu_9_100`
-- epsilon: 0.01
-- 78% overall precision
-- about 15.5 seconds per image on average
-- fastest verification: image 82 in 7 seconds
-- slowest verification: image 37 in 19 seconds
-- fastest fail: image 73/38 in 1 second
-- slowest fail: image 43 in 79 seconds
-- speedup compared to full linear programming seems to be between factor 1.5 and factor 2
+  - network: `mnist_relu_9_100`
+  - epsilon: 0.01
+  - 78% overall precision
+  - about 15.5 seconds per image on average
+  - fastest verification: image 82 in 7 seconds
+  - slowest verification: image 37 in 19 seconds
+  - fastest fail: image 73/38 in 1 second
+  - slowest fail: image 43 in 79 seconds
+  - speedup compared to full linear programming seems to be between factor 1.5 and factor 2
+
+</details>
+
 
 ### Partial Linear Programming - implemented
 
@@ -220,3 +275,9 @@ By default, all neurons in the output layer are considered "high impact", hence 
 #### Notes
 
 This strategy seems to reduce runtime quite significantly compared to linear programming and should mostly be used on the 4x1024 network. It seems that a good estimate for the `capacity` variable is the number of neurons in the hidden layer divided by the number of nuerons in the output layer (hence about 100 for the 4x1024 network). The time efficiency is not yet properly investigated.
+
+
+<details>
+  <summary>4x1024 (0.001) -- old strategy</summary>
+  [log file](./logs/4_1024_0.001_backprop.log)
+</details>
