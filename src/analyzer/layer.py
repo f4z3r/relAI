@@ -37,6 +37,8 @@ class Layer:
         self._type = _type
         self._neurons = []
         self._uses_lp = "N/A"
+        self._sum_gaps = None
+        self._total_cap = None
         if weights_out is not None:
             weights_out = Layer.convert_weights_out(weights_out)
 
@@ -170,7 +172,7 @@ class Layer:
         scores.sort(key=lambda x: x[1])
         return list(zip(*scores))[0][-capacity:]
 
-    def high_impact_idxs(self, layer, capacity, index_list):
+    def high_impact_idxs(self, layer, capacity, index_list, label_lb=None):
         """Gets the neurons having a large impact on this layer's neuron values
         for the neurons indicated in the `index_list`.
 
@@ -180,14 +182,22 @@ class Layer:
               neuron in the `index_list`.
             - index_list: the list of important neurons in this layer for which
               to check for high impact neurons.
+            - label_lb: the lower bound to which to compare the neuron's
+              upper bound to check how much capacity to give to each neuron. If
+              `None`, the same capacity is given to each neuron.
 
         Returns:
             A *set* of indexes of the important neurons in the previous layer.
         """
         high_impact_neurons = set()
         for idx in index_list:
+            if label_lb:
+                weighted_cap = self._get_capacity(capacity, index_list, idx,
+                                                  label_lb)
+            else:
+                weighted_cap = capacity
             neuron = self._neurons[idx]
-            high_impact_neurons |= neuron.high_impact_idxs(layer, capacity)
+            high_impact_neurons |= neuron.high_impact_idxs(layer, weighted_cap)
         return high_impact_neurons
 
     def get_output_bounds(self):
@@ -216,6 +226,34 @@ class Layer:
 
     def __len__(self):
         return len(self._neurons)
+
+    def _get_capacity(self, capacity, index_list, idx, label_lb):
+        """Get the capacity of a specific neuron based on its upper bound. The
+        higher the upper bounds the more capacity the neuron will get. This
+        function should only be called on the output layer!
+
+        Args:
+            - capacity: the base capacity of neurons.
+            - index_list: the list of indexes of the neurons that require
+              propagation.
+            - idx: the actual index of the neuron for which we are computing
+              the capacity.
+            - label_lb: the lower bound of the label neuron.
+
+        Returns:
+            An integer capacity.
+        """
+        if not self._total_cap:
+            self._total_cap = capacity * 10
+        if not self._sum_gaps:
+            self._sum_gaps = 0
+            for _idx in index_list:
+                ub = self._neurons[_idx].get_output_bounds()[1]
+                self._sum_gaps += ub - label_lb
+        true_index = index_list[idx]
+        ub = self._neurons[true_index].get_output_bounds()[1]
+        gap = ub - label_lb
+        return capacity // 2 + int((capacity / 2) * (gap / self._sum_gaps))
 
     @staticmethod
     def convert_weights_out(weights_out):

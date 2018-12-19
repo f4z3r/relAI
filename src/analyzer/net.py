@@ -349,7 +349,7 @@ class Net:
 
         return self.get_output_layer_bounds()
 
-    def back_propagate(self, capacity):
+    def back_propagate(self, capacity, label):
         """Perform a backpropagation technique. This will first perform a very
         efficient interval propagation to get a general ideal of the bounds.
         Then using these bounds, compute the most important neurons that
@@ -360,6 +360,7 @@ class Net:
         Args:
             - capacity: the number of high impact neurons to select in each
               backpropagation round.
+            - label: the correct label the unperturbed image gets assigned to
 
         Returns:
             Two lists representing the lower and upper bounds of the output
@@ -367,16 +368,29 @@ class Net:
         """
         # interval propagation
         self.interval_propagation()
-        # backpropagation of high impact neurons
-        important_neurons = [set(list(range(10)))]
+
+        # get output neurons that require verification
+        important_idxs = [set()]
+        label_bounds = self._layers[-1][label].get_output_bounds()
+        for neuron in self._layers[-1]:
+            bounds = neuron.get_output_bounds()
+            if bounds[1] > label_bounds[0]:
+                important_idxs[0].add(neuron)
+
+        # perform backpropagation
         for prev_num, layer in reversed(list(enumerate(self.hidden_layers()))):
+            if layer.id == len(self) - 1:
+                label_lb = label_bounds[0]
+            else:
+                label_lb = None
             idx_set = layer.high_impact_idxs(self._layers[prev_num], capacity,
-                                             important_neurons[-1])
-            important_neurons.append(idx_set)
-        important_neurons.reverse()
+                                             important_idxs[-1],
+                                             label_lb=label_lb)
+            important_idxs.append(idx_set)
+        important_idxs.reverse()
         # linear programming on high impact nuerons
         for prev_num, layer in enumerate(self.hidden_layers()):
-            idx_set = important_neurons[prev_num + 1]
+            idx_set = important_idxs[prev_num + 1]
             layer.update_bounds_lp_subset(self._layers[prev_num], idx_set)
 
         return self.get_output_layer_bounds()
