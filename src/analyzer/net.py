@@ -375,7 +375,7 @@ class Net:
         for neuron in self._layers[-1]:
             bounds = neuron.get_output_bounds()
             if bounds[1] > label_bounds[0]:
-                important_idxs[0].add(neuron)
+                important_idxs[0].add(neuron.id)
 
         # perform backpropagation
         for prev_num, layer in reversed(list(enumerate(self.hidden_layers()))):
@@ -449,3 +449,6 @@ class Net:
 
     def __len__(self):
         return len(self._layers)
+
+    def __getitem__(self, key):
+        return self._layers[key]

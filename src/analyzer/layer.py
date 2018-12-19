@@ -227,6 +227,9 @@ class Layer:
     def __len__(self):
         return len(self._neurons)
 
+    def __getitem__(self, key):
+        return self._neurons[key]
+
     def _get_capacity(self, capacity, index_list, idx, label_lb):
         """Get the capacity of a specific neuron based on its upper bound. The
         higher the upper bounds the more capacity the neuron will get. This
@@ -243,6 +246,7 @@ class Layer:
         Returns:
             An integer capacity.
         """
+        # compute caches if not available
         if not self._total_cap:
             self._total_cap = capacity * 10
         if not self._sum_gaps:
@@ -250,9 +254,11 @@ class Layer:
             for _idx in index_list:
                 ub = self._neurons[_idx].get_output_bounds()[1]
                 self._sum_gaps += ub - label_lb
-        true_index = index_list[idx]
-        ub = self._neurons[true_index].get_output_bounds()[1]
+
+        # compute capacity
+        ub = self._neurons[idx].get_output_bounds()[1]
         gap = ub - label_lb
+
         return capacity // 2 + int((capacity / 2) * (gap / self._sum_gaps))
 
     @staticmethod

@@ -276,8 +276,12 @@ By default, all neurons in the output layer are considered "high impact", hence 
 
 This strategy seems to reduce runtime quite significantly compared to linear programming and should mostly be used on the 4x1024 network. It seems that a good estimate for the `capacity` variable is the number of neurons in the hidden layer divided by the number of nuerons in the output layer (hence about 100 for the 4x1024 network). The time efficiency is not yet properly investigated.
 
-
 <details>
   <summary>4x1024 (0.001) -- old strategy</summary>
   [log file](./logs/4_1024_0.001_backprop.log)
+</details>
+
+Now a new technique is adopted. Fist of all, not all output neurons are necessarily chosen for the back-propagation. If the neuron satisfies the bounds anyways, there is no need for backpropagating the neuron. Moreover, output neurons that have larger differences to the bound satisfaction are awarded more high impact neurons to back-propagate.
+
+<details>
 </details>
