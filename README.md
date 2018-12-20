@@ -422,8 +422,37 @@ high impact neurons to back-propagate.
   ```
   riai2018@riai2018-VirtualBox:~/analyzer$ ./test.sh mnist_relu_4_1024 0 0.001
   Academic license - for non-commercial use only
+  705
+  502
+  390
+  273
+  10
   can not be verified
-  analysis time:  152.01669430732727  seconds
+
+  analysis time:  135.3421106338501  seconds
+  riai2018@riai2018-VirtualBox:~/analyzer$ ./test.sh mnist_relu_4_1024 0 0.003
+  Academic license - for non-commercial use only
+  688
+  490
+  376
+  302
+  10
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  [64.7209760953626, 82.36587988210604, 84.32325623763094, 92.60535297660537, 70.72618522123024, 77.13598857657838, 50.43105982922593, 97.92398053668056, 79.70707780919288, 90.43177901191099]
+  can not be verified
+  analysis time:  182.88847398757935  seconds
+
+  riai2018@riai2018-VirtualBox:~/analyzer$ ./test.sh mnist_relu_4_1024 0 0.006
+  Academic license - for non-commercial use only
+  705
+  476
+  452
+  307
+  10
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  [176.30024402144548, 213.72371651572283, 220.90109864400554, 228.67297077325838, 196.7929647217841, 213.0581433462186, 172.36260804621605, 223.39306625460574, 213.2329928135486, 230.86499535159382]
+  can not be verified
+  analysis time:  338.62040972709656  seconds
   ```
 
 </details>
