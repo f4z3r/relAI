@@ -17,6 +17,10 @@ venv.bak/
 *.log
 !/logs/*.log
 
+# Latex
+*.aux
+*.out
+
 # py
 __pycache__/
 *.py[cod]
