@@ -5,4 +5,5 @@
 
 cp src/analyzer/*.py /home/riai2018/analyzer/
 cp src/analyzer/test.sh /home/riai2018/analyzer/
+cp src/analyzer/test_all.sh /home/riai2018/analyzer/
 cp gurobi.lic /home/riai2018/gurobi.lic

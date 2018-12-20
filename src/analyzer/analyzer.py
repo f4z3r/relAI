@@ -214,7 +214,7 @@ def analyze(nn, LB_N0, UB_N0, label):
         # lbounds, ubounds = net.neuronwise_heuristic_per_l_fr_from(heuristic2, 0.7, 4)
         # lbounds, ubounds = net.neuronwise_heuristic_per_l_fr_reset_from(heuristic2, 0.7, 4)
         # lbounds, ubounds = net.window_linear_programming(4)
-        lbounds, ubounds = net.back_propagate(60)
+        lbounds, ubounds = net.back_propagate(1000, label)
 
         # print some information about the network
         # for layer in net:
