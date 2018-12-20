@@ -141,7 +141,7 @@ def elina_bounds_to_lists(bounds, bounds_size):
     return lbounds, ubounds
 
 
-def analyze(nn, LB_N0, UB_N0, label):
+def analyze(nn, LB_N0, UB_N0, label, epsilon):
     if LB_N0[0] == UB_N0[0]:
         num_pixels = len(LB_N0)
         nn.ffn_counter = 0
@@ -214,7 +214,44 @@ def analyze(nn, LB_N0, UB_N0, label):
         # lbounds, ubounds = net.neuronwise_heuristic_per_l_fr_from(heuristic2, 0.7, 4)
         # lbounds, ubounds = net.neuronwise_heuristic_per_l_fr_reset_from(heuristic2, 0.7, 4)
         # lbounds, ubounds = net.window_linear_programming(4)
-        lbounds, ubounds = net.back_propagate(1000, label)
+
+        if len(net._layers[1]) > 600:
+            if epsilon < 0.001:
+                lbounds, ubounds = net.linear_programming()
+            elif epsilon < 0.0023:
+                lbounds, ubounds = net.back_propagate(130, label)
+            elif epsilon < 0.003:
+                lbounds, ubounds = net.back_propagate(120, label)
+            elif epsilon < 0.004:
+                lbounds, ubounds = net.back_propagate(90, label)
+            elif epsilon < 0.005:
+                lbounds, ubounds = net.back_propagate(80, label)
+            elif epsilon < 0.006:
+                lbounds, ubounds = net.back_propagate(70, label)
+            elif epsilon < 0.007:
+                lbounds, ubounds = net.back_propagate(40, label)
+            elif epsilon < 0.01:
+                lbounds, ubounds = net.back_propagate(20, label)
+            else:
+                lbounds, ubounds = net.back_propagate(10, label)
+        else:
+            lbounds, ubounds = net.linear_programming()
+
+        # if len(net) == 5:
+        #     # 4x1024 network
+        #     if epsilon == 0.001:
+        #         lbounds, ubounds = net.linear_programming()
+        #     elif epsilon == 0.003:
+        #         lbounds, ubounds = net.back_propagate(60, label)
+        #     else:
+        #         lbounds, ubounds = net.back_propagate(40, label)
+        # elif len(net) == 7:
+        #     # 6 layer network
+        #     lbounds, ubounds = net.linear_programming()
+        # elif len(net) == 10:
+        #     # 9 layer network
+        #     lbounds, ubounds = net.linear_programming()
+
 
         # print some information about the network
         # for layer in net:
@@ -271,13 +308,13 @@ if __name__ == '__main__':
 
     return_code = 3
     # get actual prediction without perturbation
-    label, _ = analyze(nn,LB_N0,UB_N0,0)
+    label, _ = analyze(nn,LB_N0,UB_N0,0, epsilon)
     start = time.time()
     if(label==int(x0_low[0])):
         # get perturbed image
         LB_N0, UB_N0 = get_perturbed_image(x0_low, epsilon)
         # get prediction on perturbed image
-        _, verified_flag = analyze(nn, LB_N0, UB_N0, label)
+        _, verified_flag = analyze(nn, LB_N0, UB_N0, label, epsilon)
         if(verified_flag):
             print("verified")
             return_code = 0
